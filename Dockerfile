@@ -15,9 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY static/ ./static/
 
-# Pre-processed data (committed to repo) — mounted as volume in dev
-COPY data/processed/ ./data/processed/
-
 # Non-root user for security
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser
