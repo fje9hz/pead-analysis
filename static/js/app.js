@@ -11,6 +11,7 @@ const charts = {};
 const TEAL  = '#00C9A7';
 const RED   = '#FF4757';
 const WHITE = '#F2F2F2';
+const CREAM = '#F5E6C8';
 const MUTED = '#666677';
 const DIM   = '#AAAAAA';
 const YELLOW= '#FFD166';

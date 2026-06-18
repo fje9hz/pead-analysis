@@ -20,13 +20,21 @@ RAW_DIR = Path("data/raw")
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 WRDS_USERNAME = os.getenv("WRDS_USERNAME", "fje9hz")
+WRDS_PASSWORD = os.getenv("WRDS_PASSWORD")
 
 START_YEAR = 2010
 END_YEAR = 2023
 
 
 def connect() -> wrds.Connection:
-    return wrds.Connection(wrds_username=WRDS_USERNAME)
+    if not WRDS_PASSWORD:
+        return wrds.Connection(wrds_username=WRDS_USERNAME)
+
+    db = wrds.Connection(autoconnect=False, wrds_username=WRDS_USERNAME)
+    db._password = WRDS_PASSWORD
+    db.connect()
+    db.load_library_list()
+    return db
 
 
 def pull_ibes_actuals(db: wrds.Connection) -> pd.DataFrame:
@@ -61,11 +69,20 @@ def pull_ibes_consensus(db: wrds.Connection) -> pd.DataFrame:
 
 def pull_crsp_daily(db: wrds.Connection) -> pd.DataFrame:
     """Daily stock returns and prices from CRSP."""
-    log.info("Pulling CRSP daily returns (this may take a few minutes) ...")
+    log.info("Pulling CRSP daily returns for historical S&P 500 constituents ...")
     query = f"""
+        WITH sp500 AS (
+            SELECT permno, start, COALESCE(ending, DATE '9999-12-31') AS ending
+            FROM crsp.dsp500list
+            WHERE EXTRACT(YEAR FROM start) <= {END_YEAR}
+              AND (ending IS NULL OR EXTRACT(YEAR FROM ending) >= {START_YEAR})
+        )
         SELECT a.permno, a.date, a.ret, a.retx, a.prc, a.vol, a.shrout,
                b.cusip, b.ticker, b.comnam, b.siccd, b.exchcd
         FROM crsp.dsf AS a
+        JOIN sp500 AS s
+          ON a.permno = s.permno
+          AND a.date BETWEEN s.start AND s.ending
         JOIN crsp.dsenames AS b
           ON a.permno = b.permno
           AND a.date BETWEEN b.namedt AND b.nameendt

@@ -159,6 +159,23 @@ python -m src.data.wrds_pull
 
 This saves raw CSVs to `data/raw/`. Re-running is skipped unless you pass `--refresh`.
 
+For unattended runs, set:
+
+```bash
+export WRDS_USERNAME=fje9hz
+export WRDS_PASSWORD="your WRDS password"
+```
+
+The CRSP daily pull is scoped to historical S&P 500 constituents so it fits the deployed research app better than a full-market CRSP extract.
+
+### Refresh Everything from WRDS
+
+```bash
+python -m src.data.refresh
+```
+
+That command runs the full production path: pull WRDS raw data, rebuild `data/processed/features.csv`, retrain the model, and write updated metrics/model artifacts. Use `--refresh-raw` when you want to re-pull WRDS even if cached raw CSVs already exist.
+
 ### Run the Data Pipeline
 
 ```bash
@@ -213,8 +230,29 @@ docker-compose up
 1. Push repo to GitHub
 2. Create a new **Web Service** on [render.com](https://render.com)
 3. Connect the repo — Render auto-detects `render.yaml`
-4. Set env var `WRDS_USERNAME=fje9hz`
-5. On first deploy, SSH in and run the pipeline to populate `data/processed/`
+4. Set env vars:
+
+```text
+WRDS_USERNAME=fje9hz
+WRDS_PASSWORD=<your WRDS password>
+PEAD_REFRESH_TOKEN=<long random secret>
+```
+
+5. Trigger the protected WRDS refresh endpoint after deploy:
+
+```bash
+curl -X POST \
+  -H "X-Refresh-Token: $PEAD_REFRESH_TOKEN" \
+  "https://YOUR-RENDER-APP.onrender.com/api/admin/refresh-data"
+```
+
+6. Check refresh status:
+
+```bash
+curl \
+  -H "X-Refresh-Token: $PEAD_REFRESH_TOKEN" \
+  "https://YOUR-RENDER-APP.onrender.com/api/admin/refresh-status"
+```
 
 CI/CD auto-deploys on every push to `main` via `.github/workflows/ci.yml`.
 
