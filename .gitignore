@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# Data (raw WRDS files — too large / proprietary)
+data/raw/
+data/processed/*.csv
+# Keep processed model artifacts
+!data/processed/model_metrics.json
+!data/processed/feature_importance.csv
+
+# Env
+.env
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/

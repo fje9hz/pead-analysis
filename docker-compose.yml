@@ -1,0 +1,13 @@
+version: "3.9"
+
+services:
+  pead-app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./static:/app/static
+    environment:
+      - WRDS_USERNAME=fje9hz
+    restart: unless-stopped

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PEAD Analysis | Post-Earnings Announcement Drift</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <span class="nav-logo">&#9650;</span>
+        <span>PEAD Research</span>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#explorer" class="nav-link active" data-section="explorer">Explorer</a></li>
+        <li><a href="#signals" class="nav-link" data-section="signals">Signals</a></li>
+        <li><a href="#methodology" class="nav-link" data-section="methodology">Methodology</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="hero-label">Quantitative Finance Research</p>
+      <h1 class="hero-title">Post-Earnings<br>Announcement Drift</h1>
+      <p class="hero-sub">
+        Markets underreact to earnings surprises. This platform models that inefficiency —
+        quantifying how stocks continue drifting in the direction of an earnings beat or miss
+        for up to 60 days after announcement.
+      </p>
+      <div class="hero-badges">
+        <span class="badge">IBES Consensus Data</span>
+        <span class="badge">CRSP Returns</span>
+        <span class="badge">Compustat Fundamentals</span>
+        <span class="badge">S&amp;P 500 · 2010–2023</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ═══════════════════════════════ SECTION 1: EXPLORER ═══════════════════════════════ -->
+    <section id="explorer" class="section">
+      <div class="section-inner">
+        <div class="section-header">
+          <h2 class="section-title">PEAD Explorer</h2>
+          <p class="section-desc">
+            Select a ticker or sector to see historical earnings surprises and the
+            cumulative abnormal returns that followed each announcement.
+          </p>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls card">
+          <div class="controls-row">
+            <div class="control-group">
+              <label class="control-label">Ticker</label>
+              <input type="text" id="ticker-input" class="input" placeholder="e.g. AAPL" maxlength="8" />
+            </div>
+            <div class="control-group">
+              <label class="control-label">or Sector</label>
+              <select id="sector-select" class="input select">
+                <option value="">— All sectors —</option>
+              </select>
+            </div>
+            <div class="control-group">
+              <label class="control-label">From</label>
+              <select id="year-start" class="input select"></select>
+            </div>
+            <div class="control-group">
+              <label class="control-label">To</label>
+              <select id="year-end" class="input select"></select>
+            </div>
+            <div class="control-group control-group--btn">
+              <button id="explore-btn" class="btn btn-primary">Analyze</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Summary stats -->
+        <div id="summary-stats" class="stats-row hidden">
+          <div class="stat-card">
+            <div class="stat-label">Earnings Events</div>
+            <div class="stat-value" id="stat-events">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Beat Rate</div>
+            <div class="stat-value" id="stat-beat-rate">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Avg Surprise</div>
+            <div class="stat-value" id="stat-avg-surprise">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">60-Day Avg Drift</div>
+            <div class="stat-value" id="stat-avg-car60">—</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Median Analysts</div>
+            <div class="stat-value" id="stat-analysts">—</div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div id="charts-area" class="charts-grid hidden">
+          <div class="card chart-card chart-card--wide">
+            <h3 class="card-title">Earnings Surprise Timeline</h3>
+            <p class="card-sub">Each point is one earnings announcement. Color indicates beat (gold) vs miss (navy).</p>
+            <div class="chart-container">
+              <canvas id="timeline-chart"></canvas>
+            </div>
+          </div>
+          <div class="card chart-card">
+            <h3 class="card-title">Average Drift by Surprise Quintile</h3>
+            <p class="card-sub">Cumulative abnormal return (vs. market) over [0, +60] trading days.</p>
+            <div class="chart-container chart-container--sm">
+              <canvas id="car-chart"></canvas>
+            </div>
+          </div>
+          <div class="card chart-card">
+            <h3 class="card-title">Immediate vs. Delayed Reaction</h3>
+            <p class="card-sub">Day [-1, +1] captures the announcement shock. Days [0, +30] and [0, +60] reveal drift.</p>
+            <div class="chart-container chart-container--sm">
+              <canvas id="window-chart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div id="explorer-error" class="error-msg hidden"></div>
+        <div id="explorer-loading" class="loading hidden">Loading...</div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ SECTION 2: SIGNALS ═══════════════════════════════ -->
+    <section id="signals" class="section section--alt">
+      <div class="section-inner">
+        <div class="section-header">
+          <h2 class="section-title">Signal Dashboard</h2>
+          <p class="section-desc">
+            Pre-announcement model predictions. Color indicates the model's estimated
+            beat or miss probability based on analyst revision trends, estimate dispersion,
+            and historical patterns.
+          </p>
+        </div>
+
+        <div class="controls card">
+          <div class="controls-row">
+            <div class="control-group">
+              <label class="control-label">Filter by Sector</label>
+              <select id="signal-sector-select" class="input select">
+                <option value="">— All sectors —</option>
+              </select>
+            </div>
+            <div class="control-group control-group--btn">
+              <button id="signals-btn" class="btn btn-primary">Load Signals</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="signal-legend">
+          <span class="legend-item"><span class="legend-dot legend-dot--beat"></span> Likely Beat (≥ 65%)</span>
+          <span class="legend-item"><span class="legend-dot legend-dot--miss"></span> Likely Miss (≤ 35%)</span>
+          <span class="legend-item"><span class="legend-dot legend-dot--uncertain"></span> Uncertain</span>
+        </div>
+
+        <div id="signals-loading" class="loading hidden">Loading signals...</div>
+        <div id="signals-error" class="error-msg hidden"></div>
+
+        <div id="signals-table-wrap" class="hidden">
+          <div class="table-scroll">
+            <table class="signal-table" id="signals-table">
+              <thead>
+                <tr>
+                  <th>Ticker</th>
+                  <th>Sector</th>
+                  <th>Last Ann. Date</th>
+                  <th>Beat Probability</th>
+                  <th>Confidence</th>
+                  <th>Analysts</th>
+                  <th>Market Cap Tier</th>
+                  <th>Signal</th>
+                </tr>
+              </thead>
+              <tbody id="signals-tbody"></tbody>
+            </table>
+          </div>
+          <p class="disclaimer">
+            ⚠️ For educational research only. Not financial advice. Past model performance does not guarantee future results.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════ SECTION 3: METHODOLOGY ═══════════════════════════════ -->
+    <section id="methodology" class="section">
+      <div class="section-inner">
+        <div class="section-header">
+          <h2 class="section-title">Methodology</h2>
+          <p class="section-desc">
+            A plain-English explanation of the research design, data sources, and model — written for
+            anyone curious about how quantitative finance research works.
+          </p>
+        </div>
+
+        <div id="methodology-loading" class="loading">Loading methodology...</div>
+        <div id="methodology-content" class="hidden">
+
+          <div class="method-grid">
+
+            <div class="card method-card">
+              <div class="method-icon">&#128202;</div>
+              <h3 class="method-title">What Is PEAD?</h3>
+              <p class="method-text" id="text-what-is-pead"></p>
+            </div>
+
+            <div class="card method-card">
+              <div class="method-icon">&#129300;</div>
+              <h3 class="method-title">Why Does It Happen?</h3>
+              <p class="method-text" id="text-why"></p>
+            </div>
+
+            <div class="card method-card">
+              <div class="method-icon">&#128196;</div>
+              <h3 class="method-title">Data Sources</h3>
+              <p class="method-text" id="text-data"></p>
+            </div>
+
+            <div class="card method-card">
+              <div class="method-icon">&#9878;&#65039;</div>
+              <h3 class="method-title">Earnings Surprise</h3>
+              <p class="method-text" id="text-surprise"></p>
+              <div class="formula">
+                Surprise = (Actual EPS − Consensus) / |Consensus|
+              </div>
+            </div>
+
+            <div class="card method-card">
+              <div class="method-icon">&#128200;</div>
+              <h3 class="method-title">Cumulative Abnormal Return</h3>
+              <p class="method-text" id="text-car"></p>
+            </div>
+
+            <div class="card method-card">
+              <div class="method-icon">&#129302;</div>
+              <h3 class="method-title">ML Model</h3>
+              <p class="method-text" id="text-ml"></p>
+            </div>
+
+          </div>
+
+          <!-- Model performance -->
+          <div class="card metrics-card">
+            <h3 class="card-title">Model Performance (Time-Series CV)</h3>
+            <p class="card-sub">Evaluated on out-of-sample folds — model never saw test data during training.</p>
+            <div class="metrics-grid" id="metrics-grid"></div>
+          </div>
+
+          <!-- Feature importance -->
+          <div class="card">
+            <h3 class="card-title">Feature Importance</h3>
+            <p class="card-sub">Which signals most predict whether a company beats estimates.</p>
+            <div class="chart-container chart-container--sm">
+              <canvas id="feat-chart"></canvas>
+            </div>
+          </div>
+
+          <!-- Disclaimer -->
+          <div class="card disclaimer-card">
+            <p class="disclaimer-text" id="text-disclaimer"></p>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <p>
+        Built by <strong>Mustafa Ali</strong> · UVA Data Science &amp; Economics ·
+        <a href="https://github.com/fje9hz" target="_blank" rel="noopener">github.com/fje9hz</a>
+      </p>
+      <p class="footer-sub">
+        Data: WRDS / IBES / CRSP / Compustat · For educational purposes only · Not financial advice
+      </p>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
