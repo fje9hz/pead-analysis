@@ -8,19 +8,19 @@ const API = '';  // same origin
 const charts = {};
 
 // ── Color palette
-const GOLD = '#C9A84C';
-const NAVY = '#0D1B2A';
-const CREAM = '#F5F0E8';
-const GREEN = '#3DBE82';
-const RED = '#E05C5C';
-const MUTED = '#9DA8B4';
+const TEAL  = '#00C9A7';
+const RED   = '#FF4757';
+const WHITE = '#F2F2F2';
+const MUTED = '#666677';
+const DIM   = '#AAAAAA';
+const YELLOW= '#FFD166';
 
 const QUINTILE_COLORS = {
-  'Large Miss': '#E05C5C',
-  'Miss':       '#E8956B',
-  'Inline':     '#9DA8B4',
-  'Beat':       '#6BB5C9',
-  'Large Beat': '#3DBE82',
+  'Large Miss': '#FF4757',
+  'Miss':       '#FF8C69',
+  'Inline':     '#666677',
+  'Beat':       '#4FC3D4',
+  'Large Beat': '#00C9A7',
 };
 const QUINTILE_ORDER = ['Large Miss', 'Miss', 'Inline', 'Beat', 'Large Beat'];
 
@@ -37,8 +37,9 @@ function destroyChart(key) {
 
 // ── Chart.js global defaults
 Chart.defaults.color = MUTED;
-Chart.defaults.borderColor = 'rgba(201,168,76,0.1)';
-Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+Chart.defaults.font.family = "'JetBrains Mono', 'Fira Code', monospace";
+Chart.defaults.font.size = 11;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // INIT
@@ -196,18 +197,18 @@ function renderTimeline(timeline) {
         {
           label: 'Beat',
           data: beats.map(toPoint),
-          backgroundColor: 'rgba(61,190,130,0.6)',
-          borderColor: 'rgba(61,190,130,0.9)',
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          backgroundColor: 'rgba(0,201,167,0.55)',
+          borderColor: 'rgba(0,201,167,0.85)',
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
           label: 'Miss',
           data: misses.map(toPoint),
-          backgroundColor: 'rgba(224,92,92,0.55)',
-          borderColor: 'rgba(224,92,92,0.85)',
-          pointRadius: 4,
-          pointHoverRadius: 6,
+          backgroundColor: 'rgba(255,71,87,0.5)',
+          borderColor: 'rgba(255,71,87,0.8)',
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
       ],
     },
@@ -297,7 +298,7 @@ function renderWindowComparison(car_by_quintile) {
   const labels = QUINTILE_ORDER.filter(q => car_by_quintile[q]);
   const windows = ['car_m1_p1', 'car_0_p30', 'car_0_p60'];
   const windowLabels = ['Day [-1,+1]', 'Day [0,+30]', 'Day [0,+60]'];
-  const windowColors = ['rgba(201,168,76,0.7)', 'rgba(107,181,201,0.7)', 'rgba(61,190,130,0.7)'];
+  const windowColors = ['rgba(255,209,102,0.7)', 'rgba(79,195,212,0.7)', 'rgba(0,201,167,0.7)'];
 
   charts['window'] = new Chart(ctx, {
     type: 'bar',
@@ -364,7 +365,7 @@ function renderSignals(signals) {
   signals.forEach(s => {
     const prob = s.beat_prob ?? 0.5;
     const pct = Math.round(prob * 100);
-    const fillColor = prob >= 0.65 ? GREEN : prob <= 0.35 ? RED : MUTED;
+    const fillColor = prob >= 0.65 ? TEAL : prob <= 0.35 ? RED : MUTED;
     const pillClass = s.signal === 'likely_beat' ? 'beat' : s.signal === 'likely_miss' ? 'miss' : 'uncertain';
     const pillText = s.signal === 'likely_beat' ? 'Likely Beat' : s.signal === 'likely_miss' ? 'Likely Miss' : 'Uncertain';
 
@@ -378,7 +379,7 @@ function renderSignals(signals) {
           <div class="prob-bar">
             <div class="prob-bar-fill" style="width:${pct}%;background:${fillColor}"></div>
           </div>
-          <span style="color:${fillColor};font-weight:600;font-size:0.82rem">${pct}%</span>
+          <span class="prob-num" style="color:${fillColor}">${pct}%</span>
         </div>
       </td>
       <td style="color:var(--text-muted)">${s.confidence != null ? Math.round(s.confidence * 100) + '%' : '—'}</td>
@@ -462,8 +463,8 @@ function renderFeatureImportance(features) {
       datasets: [{
         label: 'Importance (%)',
         data: values,
-        backgroundColor: labels.map((_, i) => `rgba(201,168,76,${0.85 - i * 0.08})`),
-        borderColor: GOLD,
+        backgroundColor: labels.map((_, i) => `rgba(0,201,167,${0.85 - i * 0.08})`),
+        borderColor: TEAL,
         borderWidth: 1,
         borderRadius: 4,
       }],
