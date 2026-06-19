@@ -13,7 +13,7 @@ env/
 data/raw/
 
 # Row-level processed data — not committed (licensed event data)
-data/processed/features.csv
+# features.csv is derived/computed (not raw WRDS) so it IS committed
 data/processed/car_panel.csv
 data/processed/surprise.csv
 data/processed/model.joblib

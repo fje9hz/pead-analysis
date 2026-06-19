@@ -67,7 +67,7 @@ async function loadDataStatus() {
 
     // Track globally so runExplorer can gate ticker search
     window._isRealData = d.is_real_data;
-    window._hasRowLevelData = false;  // row-level features.csv not deployed
+    window._hasRowLevelData = true;  // features.csv is now deployed with the image
 
     const el = $('hero-data-status');
     if (el) {
