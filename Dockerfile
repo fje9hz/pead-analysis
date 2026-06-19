@@ -15,6 +15,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY static/ ./static/
 
+# Aggregated WRDS outputs (safe to ship — no row-level data)
+# This directory is populated locally then committed; create empty dir as fallback
+RUN mkdir -p data/processed/aggregates
+
+COPY data/processed/aggregates/ ./data/processed/aggregates/
+
 # Non-root user for security
 RUN useradd -m appuser && chown -R appuser:appuser /app
 USER appuser

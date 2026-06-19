@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 log = logging.getLogger("pead_api")
 
 PROC_DIR = Path("data/processed")
+AGG_DIR = PROC_DIR / "aggregates"
 STATIC_DIR = Path("static")
 
 app = FastAPI(
@@ -40,11 +41,63 @@ app.add_middleware(
 _cache: dict = {}
 
 
+def _load_aggregates() -> bool:
+    """Load pre-computed WRDS aggregate files if they exist. Returns True if loaded."""
+    overall_path = AGG_DIR / "overall.json"
+    if not overall_path.exists():
+        return False
+
+    def _j(name):
+        p = AGG_DIR / name
+        return json.load(open(p)) if p.exists() else None
+
+    _cache["agg_quintile_car"] = _j("quintile_car.json")
+    _cache["agg_sector"]       = _j("sector_summary.json")
+    _cache["agg_tickers"]      = _j("ticker_summary.json")
+    _cache["agg_annual"]       = _j("annual_summary.json")
+    _cache["agg_overall"]      = _j("overall.json")
+
+    metrics_path = AGG_DIR / "model_metrics.json"
+    if metrics_path.exists():
+        _cache["metrics"] = json.load(open(metrics_path))
+
+    fi_path = AGG_DIR / "feature_importance.csv"
+    if fi_path.exists():
+        import pandas as pd
+        _cache["feat_imp"] = pd.read_csv(fi_path).to_dict(orient="records")
+
+    # Build ticker list and sector list from aggregates
+    if _cache["agg_tickers"]:
+        _cache["tickers"] = sorted(t["ticker"] for t in _cache["agg_tickers"])
+    if _cache["agg_sector"]:
+        _cache["sectors"] = sorted(s["sector"] for s in _cache["agg_sector"] if s["sector"])
+
+    _cache["is_real_data"] = True
+    log.info("Loaded WRDS aggregate data from data/processed/aggregates/")
+    return True
+
+
 def _load_data():
     global _cache
     if _cache:
         return
 
+    # Try real WRDS aggregates first
+    if _load_aggregates():
+        # Also try to load full features for the explorer (optional)
+        features_path = PROC_DIR / "features.csv"
+        if features_path.exists():
+            df = pd.read_csv(features_path, low_memory=False)
+            df["anndats"] = pd.to_datetime(df["anndats"])
+            df["ann_year"] = df["anndats"].dt.year
+            for col in ["surprise", "car_m1_p1", "car_0_p30", "car_0_p60"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
+            _cache["df"] = df
+        return
+
+    # Fall back to demo data
+    _cache["is_real_data"] = False
     features_path = PROC_DIR / "features.csv"
     metrics_path = PROC_DIR / "model_metrics.json"
     feat_imp_path = PROC_DIR / "feature_importance.csv"
@@ -206,6 +259,20 @@ def get_sectors():
     return {"sectors": _cache["sectors"]}
 
 
+@app.get("/api/data-status")
+def data_status():
+    _load_data()
+    overall = _cache.get("agg_overall") or {}
+    return {
+        "is_real_data": _cache.get("is_real_data", False),
+        "source": overall.get("data_source", "Synthetic Demo Data"),
+        "n_events": overall.get("n_events"),
+        "n_tickers": overall.get("n_tickers"),
+        "sample_start": overall.get("sample_start"),
+        "sample_end": overall.get("sample_end"),
+    }
+
+
 @app.get("/api/pead-explorer")
 def pead_explorer(
     ticker: Optional[str] = Query(None),
@@ -214,6 +281,11 @@ def pead_explorer(
     end_year: int = Query(2023),
 ):
     _load_data()
+
+    # Use real WRDS aggregates if available and no ticker filter needed
+    if _cache.get("is_real_data") and not ticker and not sector and "df" not in _cache:
+        return _explorer_from_aggregates(start_year, end_year)
+
     df = _cache["df"].copy()
 
     df = df[(df["ann_year"] >= start_year) & (df["ann_year"] <= end_year)]
@@ -264,46 +336,6 @@ def pead_explorer(
         "timeline": timeline_records,
         "car_by_quintile": car_by_quintile,
     }
-
-
-@app.get("/api/signal-dashboard")
-def signal_dashboard(
-    sector: Optional[str] = Query(None),
-    n: int = Query(50),
-):
-    _load_data()
-    df = _cache["df"].copy()
-
-    # Simulate "upcoming" announcements by taking the most recent per ticker
-    latest = df.sort_values("anndats").groupby("ticker").last().reset_index()
-
-    if sector and "sector" in latest.columns:
-        latest = latest[latest["sector"] == sector]
-
-    # Sort by confidence distance from 0.5
-    if "beat_prob" in latest.columns:
-        latest["confidence"] = ((latest["beat_prob"] - 0.5).abs() * 2).round(3)
-        latest = latest.sort_values("confidence", ascending=False)
-    else:
-        latest["beat_prob"] = 0.55
-        latest["confidence"] = 0.10
-
-    cols = ["ticker", "sector", "anndats", "beat_prob", "confidence", "mkcap_quintile", "numest"]
-    available = [c for c in cols if c in latest.columns]
-    out = latest[available].head(n).copy()
-    out["anndats"] = out["anndats"].dt.strftime("%Y-%m-%d") if hasattr(out["anndats"], "dt") else out["anndats"].astype(str)
-
-    # Signal label
-    def signal(p):
-        if p >= 0.65:
-            return "likely_beat"
-        elif p <= 0.35:
-            return "likely_miss"
-        else:
-            return "uncertain"
-
-    out["signal"] = out["beat_prob"].apply(signal)
-    return {"signals": out.to_dict(orient="records")}
 
 
 @app.get("/api/methodology")
@@ -374,6 +406,123 @@ def _methodology_text() -> dict:
             "Past performance of any documented market anomaly does not guarantee future results."
         ),
     }
+
+
+def _explorer_from_aggregates(start_year: int, end_year: int) -> dict:
+    """Build explorer response from pre-computed aggregate files (no row-level data)."""
+    overall = _cache.get("agg_overall") or {}
+    quintile_car = _cache.get("agg_quintile_car") or []
+    annual = _cache.get("agg_annual") or []
+
+    # Filter annual to requested range
+    annual_filtered = [a for a in annual if start_year <= a["year"] <= end_year]
+
+    # Build a synthetic "timeline" from annual aggregates (no individual events)
+    timeline = []
+    for a in annual_filtered:
+        timeline.append({
+            "anndats": f"{a['year']}-01-01",
+            "ticker": "S&P 500 Avg",
+            "surprise": a.get("avg_surprise"),
+            "surprise_quintile": "Beat" if (a.get("avg_surprise") or 0) > 0 else "Miss",
+            "beat": 1 if (a.get("avg_surprise") or 0) > 0 else 0,
+            "actual_eps": None,
+            "medest": None,
+        })
+
+    car_by_quintile = {}
+    for q in quintile_car:
+        car_by_quintile[q["quintile"]] = {
+            "car_m1_p1": q.get("avg_car_m1_p1"),
+            "car_0_p30": q.get("avg_car_0_p30"),
+            "car_0_p60": q.get("avg_car_0_p60"),
+            "n": q.get("n"),
+        }
+
+    n_filtered = sum(a["n"] for a in annual_filtered)
+    beat_vals = [a["beat_rate"] for a in annual_filtered if a.get("beat_rate") is not None]
+    car60_vals = [a["avg_car_0_p60"] for a in annual_filtered if a.get("avg_car_0_p60") is not None]
+
+    return {
+        "summary": {
+            "n_events": n_filtered,
+            "beat_rate": round(float(np.mean(beat_vals)), 3) if beat_vals else None,
+            "avg_surprise": overall.get("avg_surprise"),
+            "avg_car_0_60": round(float(np.mean(car60_vals)), 4) if car60_vals else None,
+            "median_analysts": None,
+        },
+        "timeline": timeline,
+        "car_by_quintile": car_by_quintile,
+        "is_real_data": True,
+    }
+
+
+@app.get("/api/signal-dashboard")
+def signal_dashboard(
+    sector: Optional[str] = Query(None),
+    n: int = Query(50),
+):
+    _load_data()
+
+    # Use real ticker aggregates if available
+    if _cache.get("is_real_data") and _cache.get("agg_tickers"):
+        tickers = _cache["agg_tickers"]
+        if sector:
+            tickers = [t for t in tickers if t.get("sector") == sector]
+
+        signals = []
+        for t in tickers:
+            prob = t.get("beat_prob") or t.get("beat_rate") or 0.5
+
+            def signal(p):
+                if p >= 0.65: return "likely_beat"
+                if p <= 0.35: return "likely_miss"
+                return "uncertain"
+
+            signals.append({
+                "ticker": t["ticker"],
+                "sector": t.get("sector"),
+                "anndats": "Aggregated",
+                "beat_prob": round(prob, 3),
+                "confidence": round(abs(prob - 0.5) * 2, 3),
+                "numest": t.get("avg_num_analysts"),
+                "mkcap_quintile": t.get("mkcap_quintile"),
+                "signal": signal(prob),
+                "beat_rate": t.get("beat_rate"),
+                "avg_car_0_p60": t.get("avg_car_0_p60"),
+                "n_events": t.get("n_events"),
+            })
+
+        signals.sort(key=lambda x: abs(x["beat_prob"] - 0.5), reverse=True)
+        return {"signals": signals[:n], "is_real_data": True}
+
+    # Demo fallback (original code below)
+    return _signal_dashboard_demo(sector, n)
+
+
+def _signal_dashboard_demo(sector, n):
+    df = _cache["df"].copy()
+    latest = df.sort_values("anndats").groupby("ticker").last().reset_index()
+    if sector and "sector" in latest.columns:
+        latest = latest[latest["sector"] == sector]
+    if "beat_prob" in latest.columns:
+        latest["confidence"] = ((latest["beat_prob"] - 0.5).abs() * 2).round(3)
+        latest = latest.sort_values("confidence", ascending=False)
+    else:
+        latest["beat_prob"] = 0.55
+        latest["confidence"] = 0.10
+    cols = ["ticker", "sector", "anndats", "beat_prob", "confidence", "mkvalt", "numest", "mkcap_quintile"]
+    available = [c for c in cols if c in latest.columns]
+    out = latest[available].head(n).copy()
+    out["anndats"] = out["anndats"].dt.strftime("%Y-%m-%d") if hasattr(out["anndats"], "dt") else out["anndats"].astype(str)
+
+    def signal(p):
+        if p >= 0.65: return "likely_beat"
+        if p <= 0.35: return "likely_miss"
+        return "uncertain"
+
+    out["signal"] = out["beat_prob"].apply(signal)
+    return {"signals": out.to_dict(orient="records"), "is_real_data": False}
 
 
 def _safe_mean(series) -> Optional[float]:

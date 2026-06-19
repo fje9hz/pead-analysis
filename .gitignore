@@ -9,12 +9,17 @@ build/
 venv/
 env/
 
-# Data (raw WRDS files — too large / proprietary)
+# Raw WRDS files — proprietary, never commit
 data/raw/
-data/processed/*.csv
-# Keep processed model artifacts
-!data/processed/model_metrics.json
-!data/processed/feature_importance.csv
+
+# Row-level processed data — not committed (licensed event data)
+data/processed/features.csv
+data/processed/car_panel.csv
+data/processed/surprise.csv
+data/processed/model.joblib
+
+# Safe aggregate outputs — committed (no row-level data)
+# data/processed/aggregates/ is tracked
 
 # Env
 .env
