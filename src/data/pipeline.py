@@ -90,12 +90,22 @@ def compute_surprise(actuals: pd.DataFrame, consensus: pd.DataFrame) -> pd.DataF
     # Clip extreme values (data errors / one-time items)
     merged["surprise"] = merged["surprise"].clip(-2.0, 2.0)
 
-    # Surprise quintile — use rank-based cut so duplicate values never break labeling
-    merged["surprise_quintile"] = pd.qcut(
-        merged["surprise"].rank(method="first"),
-        q=5,
-        labels=QUINTILE_LABELS,
-    )
+    # Surprise quintile — use rank-based cut so duplicate values never break labeling.
+    # Fall back to percentile-based assignment when fewer than 5 rows exist.
+    if len(merged) >= 5:
+        merged["surprise_quintile"] = pd.qcut(
+            merged["surprise"].rank(method="first"),
+            q=5,
+            labels=QUINTILE_LABELS,
+        )
+    else:
+        cuts = merged["surprise"].rank(pct=True)
+        merged["surprise_quintile"] = pd.cut(
+            cuts,
+            bins=[0, 0.2, 0.4, 0.6, 0.8, 1.0],
+            labels=QUINTILE_LABELS,
+            include_lowest=True,
+        )
 
     # Binary beat/miss
     merged["beat"] = (merged["surprise"] > 0).astype(int)
