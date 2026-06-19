@@ -172,15 +172,19 @@ async function runExplorer() {
   hide('summary-stats');
   hide('charts-area');
   hide('explorer-error');
+  hide('explorer-info');
 
   // Ticker search requires row-level data not available in the deployed version
   if (ticker && window._isRealData && !window._hasRowLevelData) {
-    show('explorer-error');
-    $('explorer-error').textContent =
-      `Ticker search isn't available in the deployed version — individual event history requires the full pipeline data. ` +
-      `View ${ticker}'s historical beat rate in the Signal Dashboard below, or run the analysis without a ticker to see S&P 500 aggregate drift.`;
+    hide('explorer-error');
+    show('explorer-info');
+    $('explorer-info').innerHTML =
+      `<strong>ℹ️ Ticker-level history isn't available in the public deployment</strong> — the full event dataset isn't hosted for licensing reasons. ` +
+      `Clear the ticker field and hit Run Analysis to explore the S&P 500 aggregate drift pattern, ` +
+      `or scroll to <strong>Signal Dashboard</strong> to find ${ticker}'s beat probability.`;
     return;
   }
+  hide('explorer-info');
 
   show('explorer-loading');
 

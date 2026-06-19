@@ -743,6 +743,16 @@ body {
   font-family: var(--mono);
 }
 
+.info-msg {
+  background: var(--teal-glow);
+  border: 1px solid var(--teal-border);
+  border-radius: 4px;
+  padding: 0.85rem 1.1rem;
+  color: var(--white-dim);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 /* ── RESPONSIVE ── */
 @media (max-width: 900px) {
   .hero-inner { grid-template-columns: 1fr; }
