@@ -19,6 +19,39 @@ from fastapi.staticfiles import StaticFiles
 
 log = logging.getLogger("pead_api")
 
+# Fallback sector lookup for tickers whose SIC code wasn't found in Compustat
+# (usually ticker-name mismatches between IBES and Compustat, e.g. GOOG vs GOOGL)
+TICKER_SECTOR_FALLBACK: dict = {
+    "GOOG": "Technology", "GOOGL": "Technology", "GOOG/1": "Technology",
+    "AAPL": "Technology", "MSFT": "Technology", "META": "Technology",
+    "NVDA": "Technology", "INTC": "Technology", "AMD": "Technology",
+    "CSCO": "Technology", "ORCL": "Technology", "IBM": "Technology",
+    "ADBE": "Technology", "CRM": "Technology", "NOW": "Technology",
+    "SNPS": "Technology", "CDNS": "Technology", "FTNT": "Technology",
+    "PANW": "Technology", "CRWD": "Technology", "OKTA": "Technology",
+    "NFLX": "Technology", "UBER": "Technology", "LYFT": "Technology",
+    "AMZN": "Consumer Discretionary", "TSLA": "Consumer Discretionary",
+    "HD": "Consumer Discretionary", "LOW": "Consumer Discretionary",
+    "NKE": "Consumer Discretionary", "MCD": "Consumer Discretionary",
+    "SBUX": "Consumer Discretionary", "TGT": "Consumer Discretionary",
+    "PCLN": "Consumer Discretionary", "BKNG": "Consumer Discretionary",
+    "JPM": "Finance", "BAC": "Finance", "GS": "Finance", "MS": "Finance",
+    "WFC": "Finance", "C": "Finance", "AXP": "Finance", "BLK": "Finance",
+    "NDAQ": "Finance", "CME": "Finance", "ICE": "Finance",
+    "JNJ": "Healthcare", "PFE": "Healthcare", "MRK": "Healthcare",
+    "ABBV": "Healthcare", "TMO": "Healthcare", "DHR": "Healthcare",
+    "UNH": "Healthcare", "CVS": "Healthcare", "CI": "Healthcare",
+    "XOM": "Energy", "CVX": "Energy", "COP": "Energy",
+    "PG": "Consumer Staples", "KO": "Consumer Staples", "PEP": "Consumer Staples",
+    "WMT": "Consumer Staples", "COST": "Consumer Staples",
+    "APH": "Technology", "APH1": "Technology",
+    "CTAS": "Services", "FAST": "Wholesale", "ORLY": "Retail",
+    "TSCO": "Retail", "CMG": "Retail", "WMT": "Retail",
+    "ODFL": "Transportation", "UPS": "Transportation", "FDX": "Transportation",
+    "BKLY": "Finance", "SDO": "Utilities", "PLLO": "Services",
+    "LRCX": "Technology",
+}
+
 PROC_DIR = Path("data/processed")
 AGG_DIR = PROC_DIR / "aggregates"
 STATIC_DIR = Path("static")
@@ -133,8 +166,12 @@ def _load_aggregates() -> bool:
     # Build ticker list and sector list from aggregates
     if _cache["agg_tickers"]:
         _cache["tickers"] = sorted(t["ticker"] for t in _cache["agg_tickers"])
+        # Apply sector fallback so Unknown doesn't pollute sector filter
+        for t in _cache["agg_tickers"]:
+            if not t.get("sector") or t["sector"] == "Unknown":
+                t["sector"] = TICKER_SECTOR_FALLBACK.get(t["ticker"], "Unknown")
     if _cache["agg_sector"]:
-        _cache["sectors"] = sorted(s["sector"] for s in _cache["agg_sector"] if s["sector"])
+        _cache["sectors"] = sorted(s["sector"] for s in _cache["agg_sector"] if s["sector"] and s["sector"] != "Unknown")
 
     _cache["is_real_data"] = True
     log.info("Loaded WRDS aggregate data from data/processed/aggregates/")
@@ -717,9 +754,13 @@ def signal_dashboard(
                 if p <= 0.35: return "likely_miss"
                 return "uncertain"
 
+            sector = t.get("sector")
+            if not sector or sector == "Unknown":
+                sector = TICKER_SECTOR_FALLBACK.get(t["ticker"], "Unknown")
+
             signals.append({
                 "ticker": t["ticker"],
-                "sector": t.get("sector"),
+                "sector": sector,
                 "anndats": "Aggregated",
                 "beat_prob": round(prob, 3),
                 "confidence": round(abs(prob - 0.5) * 2, 3),
