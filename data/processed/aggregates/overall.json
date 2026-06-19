@@ -1,0 +1,11 @@
+{
+  "n_events": 7352,
+  "n_tickers": 687,
+  "beat_rate": 0.6007,
+  "avg_surprise": -0.0499,
+  "avg_car_0_p60": 0.0058,
+  "sample_start": "2010-01-07",
+  "sample_end": "2023-12-14",
+  "data_source": "WRDS / IBES / CRSP / Compustat",
+  "is_real_data": true
+}

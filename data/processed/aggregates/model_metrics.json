@@ -1,0 +1,60 @@
+{
+  "model_name": "Random Forest",
+  "lr": {
+    "accuracy": 0.6983,
+    "roc_auc": 0.6743,
+    "precision": 0.6903,
+    "recall": 0.9136,
+    "f1": 0.7857
+  },
+  "rf": {
+    "accuracy": 0.6976,
+    "roc_auc": 0.7042,
+    "precision": 0.7029,
+    "recall": 0.8695,
+    "f1": 0.7756
+  },
+  "selected_model": {
+    "accuracy": 0.6976,
+    "roc_auc": 0.7042,
+    "precision": 0.7029,
+    "recall": 0.8695,
+    "f1": 0.7756
+  },
+  "n_observations": 7352,
+  "beat_rate": 0.6007,
+  "feature_importance": [
+    {
+      "feature": "prior_surprise",
+      "importance": 0.7507740039290561
+    },
+    {
+      "feature": "revision_60d",
+      "importance": 0.08391758456490081
+    },
+    {
+      "feature": "dispersion",
+      "importance": 0.06935272171469228
+    },
+    {
+      "feature": "num_analysts",
+      "importance": 0.04147914143903178
+    },
+    {
+      "feature": "sector_encoded",
+      "importance": 0.023085706700290077
+    },
+    {
+      "feature": "days_since_last",
+      "importance": 0.017128025113177386
+    },
+    {
+      "feature": "mkcap_encoded",
+      "importance": 0.014262816538851584
+    },
+    {
+      "feature": "revision_30d",
+      "importance": 0.0
+    }
+  ]
+}

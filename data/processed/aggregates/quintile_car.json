@@ -1,0 +1,47 @@
+[
+  {
+    "quintile": "Large Miss",
+    "n": 877,
+    "avg_surprise": -0.736,
+    "avg_car_m1_p1": 0.0071,
+    "avg_car_0_p30": 0.0137,
+    "avg_car_0_p60": 0.0206,
+    "median_car_0_p60": 0.019
+  },
+  {
+    "quintile": "Miss",
+    "n": 832,
+    "avg_surprise": -0.0742,
+    "avg_car_m1_p1": -0.0149,
+    "avg_car_0_p30": -0.0155,
+    "avg_car_0_p60": -0.0129,
+    "median_car_0_p60": -0.0089
+  },
+  {
+    "quintile": "Inline",
+    "n": 3247,
+    "avg_surprise": 0.0035,
+    "avg_car_m1_p1": -0.0021,
+    "avg_car_0_p30": 0.0005,
+    "avg_car_0_p60": -0.0038,
+    "median_car_0_p60": -0.0005
+  },
+  {
+    "quintile": "Beat",
+    "n": 1861,
+    "avg_surprise": 0.0368,
+    "avg_car_m1_p1": 0.0102,
+    "avg_car_0_p30": 0.0146,
+    "avg_car_0_p60": 0.0189,
+    "median_car_0_p60": 0.0183
+  },
+  {
+    "quintile": "Large Beat",
+    "n": 535,
+    "avg_surprise": 0.4862,
+    "avg_car_m1_p1": 0.0124,
+    "avg_car_0_p30": 0.021,
+    "avg_car_0_p60": 0.0235,
+    "median_car_0_p60": 0.0171
+  }
+]

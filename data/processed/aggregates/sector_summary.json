@@ -1,0 +1,98 @@
+[
+  {
+    "sector": "Unknown",
+    "n": 3230,
+    "beat_rate": 0.5947,
+    "avg_surprise": -0.0544,
+    "avg_car_0_p60": 0.0067,
+    "avg_car_0_p30": 0.0071
+  },
+  {
+    "sector": "Manufacturing",
+    "n": 1923,
+    "beat_rate": 0.6391,
+    "avg_surprise": -0.0479,
+    "avg_car_0_p60": 0.0045,
+    "avg_car_0_p30": 0.0024
+  },
+  {
+    "sector": "Transportation",
+    "n": 516,
+    "beat_rate": 0.5872,
+    "avg_surprise": -0.0355,
+    "avg_car_0_p60": 0.013,
+    "avg_car_0_p30": 0.0041
+  },
+  {
+    "sector": "Services",
+    "n": 475,
+    "beat_rate": 0.5979,
+    "avg_surprise": -0.0564,
+    "avg_car_0_p60": -0.0104,
+    "avg_car_0_p30": 0.0041
+  },
+  {
+    "sector": "Finance",
+    "n": 375,
+    "beat_rate": 0.6,
+    "avg_surprise": 0.0066,
+    "avg_car_0_p60": -0.0043,
+    "avg_car_0_p30": 0.0064
+  },
+  {
+    "sector": "Retail",
+    "n": 313,
+    "beat_rate": 0.5048,
+    "avg_surprise": -0.2152,
+    "avg_car_0_p60": 0.0264,
+    "avg_car_0_p30": 0.0175
+  },
+  {
+    "sector": "Mining",
+    "n": 271,
+    "beat_rate": 0.524,
+    "avg_surprise": 0.022,
+    "avg_car_0_p60": 0.0154,
+    "avg_car_0_p30": 0.0002
+  },
+  {
+    "sector": "Wholesale",
+    "n": 144,
+    "beat_rate": 0.5625,
+    "avg_surprise": -0.1345,
+    "avg_car_0_p60": 0.0021,
+    "avg_car_0_p30": 0.0011
+  },
+  {
+    "sector": "Professional",
+    "n": 38,
+    "beat_rate": 0.5263,
+    "avg_surprise": 0.0013,
+    "avg_car_0_p60": -0.0078,
+    "avg_car_0_p30": -0.0173
+  },
+  {
+    "sector": "Construction",
+    "n": 31,
+    "beat_rate": 0.7097,
+    "avg_surprise": 0.0288,
+    "avg_car_0_p60": 0.0113,
+    "avg_car_0_p30": 0.0212
+  },
+  {
+    "sector": "Real Estate",
+    "n": 19,
+    "beat_rate": 0.7895,
+    "avg_surprise": 0.0142,
+    "avg_car_0_p60": -0.002,
+    "avg_car_0_p30": -0.0112
+  },
+  {
+    "sector": "Public",
+    "n": 17,
+    "beat_rate": 0.9412,
+    "avg_surprise": 1.3491,
+    "avg_car_0_p60": -0.022,
+    "avg_car_0_p30": -0.0106
+  }
+]
