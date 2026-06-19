@@ -90,13 +90,12 @@ def compute_surprise(actuals: pd.DataFrame, consensus: pd.DataFrame) -> pd.DataF
     # Clip extreme values (data errors / one-time items)
     merged["surprise"] = merged["surprise"].clip(-2.0, 2.0)
 
-    # Surprise quintile (requires at least 5 distinct values)
-    if len(merged) >= 5:
-        merged["surprise_quintile"] = pd.qcut(
-            merged["surprise"], q=5, labels=QUINTILE_LABELS, duplicates="drop"
-        )
-    else:
-        merged["surprise_quintile"] = pd.NA
+    # Surprise quintile — use rank-based cut so duplicate values never break labeling
+    merged["surprise_quintile"] = pd.qcut(
+        merged["surprise"].rank(method="first"),
+        q=5,
+        labels=QUINTILE_LABELS,
+    )
 
     # Binary beat/miss
     merged["beat"] = (merged["surprise"] > 0).astype(int)
@@ -234,9 +233,9 @@ def add_fundamentals(panel: pd.DataFrame, compustat: pd.DataFrame) -> pd.DataFra
     # values, so duplicate quantile edges can reduce the number of bins.
     panel["mkvalt"] = pd.to_numeric(panel["mkvalt"], errors="coerce")
     mkvalt = panel["mkvalt"].fillna(panel["mkvalt"].median())
-    mkcap_bins = pd.qcut(mkvalt, q=5, labels=False, duplicates="drop")
+    mkcap_bins = pd.qcut(mkvalt.rank(method="first"), q=5, labels=False)
     panel["mkcap_quintile"] = mkcap_bins.apply(
-        lambda bin_id: f"Q{int(bin_id) + 1}" if pd.notna(bin_id) else pd.NA
+        lambda b: f"Q{int(b) + 1}" if pd.notna(b) else pd.NA
     )
 
     # Broad sector from SIC code
