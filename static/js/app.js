@@ -64,6 +64,11 @@ async function loadDataStatus() {
   try {
     const res = await fetch(`${API}/api/data-status`);
     const d = await res.json();
+
+    // Track globally so runExplorer can gate ticker search
+    window._isRealData = d.is_real_data;
+    window._hasRowLevelData = false;  // row-level features.csv not deployed
+
     const el = $('hero-data-status');
     if (el) {
       el.textContent = d.is_real_data ? 'WRDS Data' : 'Demo Data';
@@ -167,6 +172,16 @@ async function runExplorer() {
   hide('summary-stats');
   hide('charts-area');
   hide('explorer-error');
+
+  // Ticker search requires row-level data not available in the deployed version
+  if (ticker && window._isRealData && !window._hasRowLevelData) {
+    show('explorer-error');
+    $('explorer-error').textContent =
+      `Ticker search isn't available in the deployed version — individual event history requires the full pipeline data. ` +
+      `View ${ticker}'s historical beat rate in the Signal Dashboard below, or run the analysis without a ticker to see S&P 500 aggregate drift.`;
+    return;
+  }
+
   show('explorer-loading');
 
   const params = new URLSearchParams({ start_year: startYear, end_year: endYear });
