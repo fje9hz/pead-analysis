@@ -321,12 +321,10 @@ function renderCarByQuintile(car_by_quintile) {
     'Beat':       'Beat',
     'Large Beat': 'Crushed It',
   };
-  const labels = QUINTILE_ORDER.filter(q => car_by_quintile[q]);
+  // Only include quintiles that have actual CAR data (not null)
+  const labels = QUINTILE_ORDER.filter(q => car_by_quintile[q]?.car_0_p60 != null);
   const plainLabels = labels.map(q => PLAIN_LABELS[q] || q);
-  const values = labels.map(q => {
-    const v = car_by_quintile[q]?.car_0_p60;
-    return v != null ? +(v * 100).toFixed(2) : 0;
-  });
+  const values = labels.map(q => +(car_by_quintile[q].car_0_p60 * 100).toFixed(2));
   const colors = labels.map(q => QUINTILE_COLORS[q] + 'CC');
   const borders = labels.map(q => QUINTILE_COLORS[q]);
 
@@ -366,26 +364,41 @@ function renderInsight(car_by_quintile) {
   const el = $('insight-car');
   if (!el) return;
   if (el.classList.contains('visible')) return;  // already set by note
+
   const beat = car_by_quintile['Large Beat'];
   const miss = car_by_quintile['Large Miss'];
-  if (!beat && !miss) return;
+  const beatPct60 = beat?.car_0_p60;
+  const missPct60 = miss?.car_0_p60;
+  const beatImm   = beat?.car_m1_p1;
 
-  const beatPct = beat?.car_0_p60 != null ? `+${(beat.car_0_p60 * 100).toFixed(1)}%` : null;
-  const missPct = miss?.car_0_p60 != null ? `${(miss.car_0_p60 * 100).toFixed(1)}%` : null;
-  const beatImm = beat?.car_m1_p1 != null ? `+${(beat.car_m1_p1 * 100).toFixed(1)}%` : null;
+  // Need at least one data point to say something useful
+  if (beatPct60 == null && missPct60 == null) return;
 
-  let text = '📌 <strong>What this means in plain English:</strong> ';
-  if (beatPct && missPct) {
-    text += `Stocks that crushed analyst expectations drifted <strong>${beatPct}</strong> above the market over 60 days. `;
-    text += `Stocks that badly missed fell <strong>${missPct}</strong>. `;
+  const fmt = (v, plus=true) => `${plus && v > 0 ? '+' : ''}${(v * 100).toFixed(1)}%`;
+
+  let parts = [];
+
+  if (beatPct60 != null && missPct60 != null) {
+    const gap = ((beatPct60 - missPct60) * 100).toFixed(1);
+    parts.push(
+      `Stocks that <strong>crushed estimates</strong> drifted <strong>${fmt(beatPct60)}</strong> above the market over 60 days, ` +
+      `while stocks that <strong>badly missed</strong> returned <strong>${fmt(missPct60, false)}</strong> — a spread of <strong>${gap} percentage points</strong>.`
+    );
+  } else if (beatPct60 != null) {
+    parts.push(`Stocks that <strong>crushed estimates</strong> drifted <strong>${fmt(beatPct60)}</strong> above the market over 60 days.`);
+  } else if (missPct60 != null) {
+    parts.push(`Stocks that <strong>badly missed</strong> returned <strong>${fmt(missPct60, false)}</strong> relative to the market over 60 days.`);
   }
-  if (beatImm && beat?.car_0_p60 != null) {
-    const delayed = (beat.car_0_p60 * 100).toFixed(1);
-    const immediate = (beat.car_m1_p1 * 100).toFixed(1);
-    text += `Of the ${beatPct} total drift for big beats, only <strong>${beatImm}</strong> happened on earnings day itself — the rest built up gradually over the following weeks. That delayed reaction is PEAD.`;
+
+  if (beatPct60 != null && beatImm != null) {
+    parts.push(
+      `Of that ${fmt(beatPct60)} total drift for big beats, only <strong>${fmt(beatImm)}</strong> happened on earnings day itself — ` +
+      `the rest built up gradually over the following weeks. That slow drift is what PEAD describes.`
+    );
   }
 
-  el.innerHTML = text;
+  if (parts.length === 0) return;
+  el.innerHTML = '📌 <strong>What this means in plain English:</strong> ' + parts.join(' ');
   el.classList.add('visible');
 }
 
