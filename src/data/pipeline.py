@@ -230,13 +230,13 @@ def add_fundamentals(panel: pd.DataFrame, compustat: pd.DataFrame) -> pd.DataFra
 
     panel = panel.merge(comp_sub, on=["ticker", "ann_year"], how="left")
 
-    # Market cap quintile
+    # Market cap quintile. Some WRDS pulls have repeated or sparse market-cap
+    # values, so duplicate quantile edges can reduce the number of bins.
     panel["mkvalt"] = pd.to_numeric(panel["mkvalt"], errors="coerce")
-    panel["mkcap_quintile"] = pd.qcut(
-        panel["mkvalt"].fillna(panel["mkvalt"].median()),
-        q=5,
-        labels=["Q1", "Q2", "Q3", "Q4", "Q5"],
-        duplicates="drop",
+    mkvalt = panel["mkvalt"].fillna(panel["mkvalt"].median())
+    mkcap_bins = pd.qcut(mkvalt, q=5, labels=False, duplicates="drop")
+    panel["mkcap_quintile"] = mkcap_bins.apply(
+        lambda bin_id: f"Q{int(bin_id) + 1}" if pd.notna(bin_id) else pd.NA
     )
 
     # Broad sector from SIC code
