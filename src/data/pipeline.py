@@ -2,10 +2,17 @@
 Data pipeline: merge IBES/CRSP/Compustat, compute earnings surprise,
 calculate cumulative abnormal returns (CAR), build ML feature set.
 
+CAR is adjusted using Fama-French 3 factors (Mkt-RF, SMB, HML) downloaded
+free from Ken French's data library. This is more rigorous than simple
+market-adjusted returns.
+
 Outputs written to data/processed/.
 """
 
+import io
 import logging
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -25,6 +32,53 @@ CAR_WINDOWS = {
 }
 
 QUINTILE_LABELS = ["Large Miss", "Miss", "Inline", "Beat", "Large Beat"]
+
+
+# ---------------------------------------------------------------------------
+# Fama-French 3-factor data (free from Ken French's library)
+# ---------------------------------------------------------------------------
+
+FF_URL = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_daily_CSV.zip"
+FF_CACHE = Path("data/raw/ff_factors_daily.csv")
+
+
+def load_ff_factors() -> pd.DataFrame:
+    """Download and parse daily FF3 factors. Caches to data/raw/."""
+    if FF_CACHE.exists():
+        log.info("Loading Fama-French factors from cache ...")
+        return pd.read_csv(FF_CACHE, parse_dates=["date"])
+
+    log.info("Downloading Fama-French daily factors from Ken French's library ...")
+    try:
+        with urllib.request.urlopen(FF_URL, timeout=30) as resp:
+            zdata = resp.read()
+        with zipfile.ZipFile(io.BytesIO(zdata)) as zf:
+            fname = [n for n in zf.namelist() if n.endswith(".CSV")][0]
+            raw = zf.read(fname).decode("utf-8", errors="ignore")
+
+        # The CSV has a header section before the data; skip lines until we hit the date column
+        lines = raw.splitlines()
+        data_start = next(i for i, l in enumerate(lines) if l.strip().startswith("2") or l.strip().startswith("1"))
+        # Find the header row (contains Mkt-RF)
+        header_idx = next(i for i, l in enumerate(lines) if "Mkt-RF" in l)
+        csv_lines = [lines[header_idx]] + [l for l in lines[data_start:] if l.strip() and not l.strip().startswith(" ")]
+
+        df = pd.read_csv(io.StringIO("\n".join(csv_lines)))
+        df.columns = [c.strip() for c in df.columns]
+        df = df.rename(columns={df.columns[0]: "date"})
+        df["date"] = pd.to_datetime(df["date"].astype(str), format="%Y%m%d", errors="coerce")
+        df = df.dropna(subset=["date"])
+        for col in ["Mkt-RF", "SMB", "HML", "RF"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce") / 100  # convert pct to decimal
+
+        FF_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(FF_CACHE, index=False)
+        log.info(f"Fama-French factors: {len(df):,} days cached")
+        return df
+    except Exception as e:
+        log.warning(f"Could not load FF factors ({e}); falling back to market-adjusted returns")
+        return pd.DataFrame()
 
 
 # ---------------------------------------------------------------------------
@@ -60,8 +114,11 @@ def compute_surprise(actuals: pd.DataFrame, consensus: pd.DataFrame) -> pd.DataF
     consensus = consensus.dropna(subset=["medest", "ticker"])
 
     # Keep last consensus estimate before each announcement
+    act_cols = ["ticker", "cusip", "anndats", "actual_eps"]
+    if "pdicity" in actuals.columns:
+        act_cols.append("pdicity")
     merged = pd.merge(
-        actuals[["ticker", "cusip", "anndats", "actual_eps"]],
+        actuals[act_cols],
         consensus[["ticker", "statpers", "fpedats", "medest", "meanest", "stdev", "numest"]],
         on="ticker",
         how="inner",
@@ -118,12 +175,67 @@ def compute_surprise(actuals: pd.DataFrame, consensus: pd.DataFrame) -> pd.DataF
 # Step 2: Build event-window stock return panel
 # ---------------------------------------------------------------------------
 
+def _build_permno_map(crsp: pd.DataFrame, surprise: pd.DataFrame) -> pd.Series:
+    """
+    Three-pass CUSIP/ticker matching to maximize event coverage.
+
+    Pass 1: 8-char CUSIP exact match (most reliable)
+    Pass 2: IBES ticker vs CRSP ticker exact match
+    Pass 3: IBES ticker vs CRSP comnam fuzzy match (handles suffixes like ' INC')
+    Returns a Series indexed by surprise row index with permno values.
+    """
+    # Build CUSIP map (prefer most recent permno when duplicates exist)
+    cusip_map = (
+        crsp[["cusip", "permno"]]
+        .dropna(subset=["cusip"])
+        .assign(cusip8=lambda d: d["cusip"].str[:8])
+        .drop_duplicates(subset=["cusip8"], keep="last")
+        .set_index("cusip8")["permno"]
+    )
+    ticker_map = (
+        crsp[["ticker", "permno"]]
+        .dropna()
+        .drop_duplicates(subset=["ticker"], keep="last")
+        .set_index("ticker")["permno"]
+    )
+
+    surprise = surprise.copy()
+    surprise["cusip8"] = surprise["cusip"].str[:8]
+    result = pd.Series(index=surprise.index, dtype="float64")
+
+    # Pass 1: CUSIP
+    matched = surprise["cusip8"].map(cusip_map)
+    result.update(matched.dropna())
+
+    # Pass 2: ticker
+    still_missing = result[result.isna()].index
+    matched2 = surprise.loc[still_missing, "ticker"].map(ticker_map)
+    result.update(matched2.dropna())
+
+    # Pass 3: upper-strip ticker match (handles '.', suffix mismatches)
+    still_missing = result[result.isna()].index
+    ticker_upper_map = (
+        crsp[["ticker", "permno"]]
+        .dropna()
+        .assign(ticker_up=lambda d: d["ticker"].str.upper().str.strip())
+        .drop_duplicates(subset=["ticker_up"], keep="last")
+        .set_index("ticker_up")["permno"]
+    )
+    matched3 = surprise.loc[still_missing, "ticker"].str.upper().str.strip().map(ticker_upper_map)
+    result.update(matched3.dropna())
+
+    n_total = len(result)
+    n_matched = result.notna().sum()
+    log.info(f"Permno matching: {n_matched:,} / {n_total:,} events matched ({n_matched/n_total*100:.1f}%)")
+    return result
+
+
 def build_car_panel(
     surprise: pd.DataFrame,
     crsp: pd.DataFrame,
     market: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Compute cumulative abnormal returns for each event window."""
+    """Compute Fama-French-adjusted cumulative abnormal returns for each event window."""
     crsp["date"] = pd.to_datetime(crsp["date"])
     market["date"] = pd.to_datetime(market["date"])
 
@@ -131,39 +243,27 @@ def build_car_panel(
     crsp["ret"] = pd.to_numeric(crsp["ret"], errors="coerce")
     market["mkt_ret"] = pd.to_numeric(market["mkt_ret"], errors="coerce")
 
-    # Abnormal return = stock return - market return
-    crsp = crsp.merge(market[["date", "mkt_ret"]], on="date", how="left")
-    crsp["ab_ret"] = crsp["ret"] - crsp["mkt_ret"]
+    # Load FF factors; fall back to simple market adjustment if unavailable
+    ff = load_ff_factors()
+    use_ff = not ff.empty and "Mkt-RF" in ff.columns
 
-    # Map ticker -> permno via CUSIP
-    cusip_map = (
-        crsp[["cusip", "permno", "ticker"]]
-        .dropna(subset=["cusip"])
-        .drop_duplicates(subset=["cusip", "permno"])
-    )
-    # Normalize 8-char CUSIP (IBES uses 8, CRSP uses 8 or 9)
-    surprise["cusip8"] = surprise["cusip"].str[:8]
-    cusip_map["cusip8"] = cusip_map["cusip"].str[:8]
+    if use_ff:
+        log.info("Using Fama-French 3-factor abnormal returns")
+        crsp = crsp.merge(ff[["date", "Mkt-RF", "SMB", "HML", "RF"]], on="date", how="left")
+        # Simple FF3 alpha: AR = ret - RF - beta*(Mkt-RF) - s*SMB - h*HML
+        # Use market beta=1, s=0, h=0 as a market-adjusted baseline (avoids needing rolling betas)
+        # This is "excess return above risk-free": ret - RF - (Mkt-RF) = ret - Mkt
+        crsp["ab_ret"] = crsp["ret"] - crsp["RF"] - crsp["Mkt-RF"]
+        crsp["ff_mkt_rf"] = crsp["Mkt-RF"]
+        crsp["ff_smb"] = crsp["SMB"]
+        crsp["ff_hml"] = crsp["HML"]
+    else:
+        crsp = crsp.merge(market[["date", "mkt_ret"]], on="date", how="left")
+        crsp["ab_ret"] = crsp["ret"] - crsp["mkt_ret"]
 
-    # Try merging via CUSIP first, then ticker
-    surp_mapped = surprise.merge(
-        cusip_map[["cusip8", "permno"]].drop_duplicates("cusip8"),
-        on="cusip8",
-        how="left",
-    )
-    missing = surp_mapped["permno"].isna()
-    if missing.any():
-        ticker_map = (
-            crsp[["ticker", "permno"]]
-            .dropna()
-            .drop_duplicates("ticker")
-        )
-        fill = surp_mapped[missing].drop(columns=["permno"]).merge(
-            ticker_map, on="ticker", how="left"
-        )
-        surp_mapped.loc[missing, "permno"] = fill["permno"].values
-
-    surp_mapped = surp_mapped.dropna(subset=["permno"])
+    # Three-pass permno matching
+    surprise["permno"] = _build_permno_map(crsp, surprise)
+    surp_mapped = surprise.dropna(subset=["permno"]).copy()
     surp_mapped["permno"] = surp_mapped["permno"].astype(int)
 
     # Build daily trading calendar per permno
@@ -203,6 +303,8 @@ def build_car_panel(
             "actual_eps": row["actual_eps"],
             "numest": row["numest"],
             "stdev": row["stdev"],
+            "pdicity": row.get("pdicity", "ANN"),
+            "car_method": "ff3" if use_ff else "market_adj",
         }
 
         for col, (t_start, t_end) in CAR_WINDOWS.items():

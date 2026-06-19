@@ -40,12 +40,12 @@ def connect() -> wrds.Connection:
 
 
 def pull_ibes_actuals(db: wrds.Connection) -> pd.DataFrame:
-    """Annual EPS actuals from IBES."""
-    log.info("Pulling IBES actuals ...")
+    """Annual AND quarterly EPS actuals from IBES."""
+    log.info("Pulling IBES actuals (annual + quarterly) ...")
     query = f"""
         SELECT ticker, cusip, anndats, value AS actual_eps, pdicity, curr_act
         FROM ibes.act_epsus
-        WHERE pdicity = 'ANN'
+        WHERE pdicity IN ('ANN', 'QTR')
           AND curr_act = 'USD'
           AND EXTRACT(YEAR FROM anndats) BETWEEN {START_YEAR} AND {END_YEAR}
     """
@@ -55,13 +55,13 @@ def pull_ibes_actuals(db: wrds.Connection) -> pd.DataFrame:
 
 
 def pull_ibes_consensus(db: wrds.Connection) -> pd.DataFrame:
-    """Consensus EPS estimates from IBES summary file."""
-    log.info("Pulling IBES consensus estimates ...")
+    """Consensus EPS estimates — annual (fpi=1) and quarterly (fpi=6-9)."""
+    log.info("Pulling IBES consensus estimates (annual + quarterly) ...")
     query = f"""
         SELECT ticker, cusip, statpers, fpedats, fpi, medest, meanest,
                stdev, numest, highest, lowest
         FROM ibes.statsumu_epsus
-        WHERE fpi = '1'
+        WHERE fpi IN ('1', '6', '7', '8', '9')
           AND EXTRACT(YEAR FROM statpers) BETWEEN {START_YEAR - 1} AND {END_YEAR}
     """
     df = db.raw_sql(query, date_cols=["statpers", "fpedats"])

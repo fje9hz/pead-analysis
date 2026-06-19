@@ -46,11 +46,11 @@ def load_features() -> pd.DataFrame:
     return df
 
 
-def safe_mean(s) -> float | None:
+def safe_mean(s):
     v = pd.to_numeric(s, errors="coerce").dropna()
     return round(float(v.mean()), 4) if len(v) else None
 
-def safe_median(s) -> float | None:
+def safe_median(s):
     v = pd.to_numeric(s, errors="coerce").dropna()
     return round(float(v.median()), 4) if len(v) else None
 
@@ -187,6 +187,10 @@ def run():
     ticker_summary = add_beat_probabilities(ticker_summary)
     annual_summary = build_annual_summary(df)
 
+    car_method = df["car_method"].mode().iloc[0] if "car_method" in df.columns else "market_adj"
+    n_quarterly = int((df["pdicity"] == "QTR").sum()) if "pdicity" in df.columns else 0
+    n_annual = int((df["pdicity"] == "ANN").sum()) if "pdicity" in df.columns else int(len(df))
+
     overall = {
         "n_events": int(len(df)),
         "n_tickers": int(df["ticker"].nunique()),
@@ -197,6 +201,9 @@ def run():
         "sample_end": str(df["anndats"].max().date()),
         "data_source": "WRDS / IBES / CRSP / Compustat",
         "is_real_data": True,
+        "car_method": car_method,
+        "n_annual_events": n_annual,
+        "n_quarterly_events": n_quarterly,
     }
 
     outputs = {
