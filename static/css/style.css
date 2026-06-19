@@ -432,6 +432,15 @@ body {
   width: 100%;
   border-collapse: collapse;
 }
+.th-note {
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--white-muted);
+  margin-top: 1px;
+}
 .signal-table th {
   text-align: left;
   padding: 0.55rem 0.9rem;

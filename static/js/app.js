@@ -647,7 +647,7 @@ function renderWealthChart(annual) {
     data: {
       labels,
       datasets: [{
-        label: 'Cumulative Return vs Market (%)',
+        label: 'Total return above market (%)',
         data: wealth,
         borderColor: color,
         backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba').replace('#00C9A7', 'rgba(0,201,167,0.08)').replace('#FF4757','rgba(255,71,87,0.08)'),
@@ -753,7 +753,7 @@ function renderModelComparison(metrics) {
   const ctx = $('model-compare-chart');
   if (!ctx || !metrics.lr_metrics || !metrics.rf_metrics) return;
 
-  const metricLabels = ['AUC', 'Accuracy', 'Precision', 'Recall', 'F1'];
+  const metricLabels = ['Prediction Score (AUC)', 'Accuracy', 'Precision', 'Recall', 'F1 Score'];
   const metricKeys   = ['roc_auc', 'accuracy', 'precision', 'recall', 'f1'];
 
   charts['model-compare'] = new Chart(ctx.getContext('2d'), {

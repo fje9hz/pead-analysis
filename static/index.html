@@ -230,11 +230,11 @@
                 <tr>
                   <th>Ticker</th>
                   <th>Sector</th>
-                  <th>Last Ann.</th>
-                  <th>Beat Probability</th>
-                  <th>Confidence</th>
-                  <th>Analysts</th>
-                  <th>Mkt Cap Tier</th>
+                  <th>Last Announcement</th>
+                  <th>Beat Probability <span class="th-note">model score</span></th>
+                  <th>Conviction <span class="th-note">how decisive</span></th>
+                  <th>Analysts Covering</th>
+                  <th>Size <span class="th-note">Q5 = largest</span></th>
                   <th>Signal</th>
                 </tr>
               </thead>
@@ -286,34 +286,34 @@
               <div class="stat-value" id="bt-n-trades">—</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Total Return</div>
+              <div class="stat-label">Total Return vs Market</div>
               <div class="stat-value" id="bt-total-return">—</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">CAGR</div>
+              <div class="stat-label">Annualized Return</div>
               <div class="stat-value" id="bt-cagr">—</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Avg Trade Return</div>
+              <div class="stat-label">Avg Return Per Trade</div>
               <div class="stat-value" id="bt-avg-trade">—</div>
             </div>
             <div class="stat-card">
-              <div class="stat-label">Win Rate</div>
+              <div class="stat-label">% of Trades Profitable</div>
               <div class="stat-value" id="bt-win-rate">—</div>
             </div>
           </div>
 
           <div class="charts-grid">
             <div class="card chart-card chart-card--wide">
-              <h3 class="card-title">Cumulative Wealth Index (2010–2023)</h3>
-              <p class="card-sub">Starting with $1, reinvesting average returns each year for the selected quintile. Assumes equal-weight position in every stock that announces in that quintile.</p>
+              <h3 class="card-title">How $1 Would Have Grown (2010–2023)</h3>
+              <p class="card-sub">Simulates buying every stock in the selected group the day after earnings and holding for 60 days, year after year. Shows cumulative return above the market — so +20% means this strategy beat the market by 20 percentage points over the full period.</p>
               <div class="chart-container">
                 <canvas id="bt-wealth-chart"></canvas>
               </div>
             </div>
             <div class="card chart-card">
-              <h3 class="card-title">Average Return Per Year</h3>
-              <p class="card-sub">Annual average abnormal return (above market) per trade in this quintile. Negative years show when the drift pattern breaks down.</p>
+              <h3 class="card-title">Return Above Market Per Year</h3>
+              <p class="card-sub">Average return each trade made above the stock market that year. Green = beat the market, red = underperformed. Shows which years the drift pattern was strongest and when it broke down.</p>
               <div class="chart-container chart-container--sm">
                 <canvas id="bt-annual-chart"></canvas>
               </div>
@@ -388,8 +388,8 @@
           </div>
 
           <div class="card">
-            <h3 class="card-title">Logistic Regression vs Random Forest</h3>
-            <p class="card-sub">Both models trained identically. Random Forest wins on AUC (0.704 vs 0.674) — selected as the production model. LR has higher recall but lower precision, meaning it flags more beats but with more false positives.</p>
+            <h3 class="card-title">Which Model Won? Logistic Regression vs Random Forest</h3>
+            <p class="card-sub">Both models were trained on the same data and evaluated identically. <strong>Random Forest was selected</strong> because it scored higher on AUC — the main metric, which measures how well the model ranks beats above misses (1.0 = perfect, 0.5 = coin flip). LR catches more beats overall but with more false alarms. All scores are out of 100%.</p>
             <div class="chart-container chart-container--sm">
               <canvas id="model-compare-chart"></canvas>
             </div>
