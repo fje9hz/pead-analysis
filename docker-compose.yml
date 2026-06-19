@@ -10,4 +10,6 @@ services:
       - ./static:/app/static
     environment:
       - WRDS_USERNAME=fje9hz
+      - WRDS_PASSWORD=${WRDS_PASSWORD:-}
+      - PEAD_REFRESH_TOKEN=${PEAD_REFRESH_TOKEN:-local-dev-refresh-token}
     restart: unless-stopped

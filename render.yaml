@@ -7,6 +7,10 @@ services:
     envVars:
       - key: WRDS_USERNAME
         value: fje9hz
+      - key: WRDS_PASSWORD
+        sync: false
+      - key: PEAD_REFRESH_TOKEN
+        sync: false
     disk:
       name: pead-data
       mountPath: /opt/render/project/src/data

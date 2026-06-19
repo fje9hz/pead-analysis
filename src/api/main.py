@@ -4,12 +4,15 @@ FastAPI backend for the PEAD Analysis App.
 
 import json
 import logging
+import os
+from datetime import datetime, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Optional
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +42,67 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 
 _cache: dict = {}
+_refresh_lock = Lock()
+_refresh_status = {
+    "state": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "refresh_raw": False,
+    "result": None,
+    "error": None,
+}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _require_refresh_token(token: Optional[str]):
+    expected = os.getenv("PEAD_REFRESH_TOKEN")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Data refresh is disabled. Set PEAD_REFRESH_TOKEN to enable it.",
+        )
+    if token != expected:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+
+def _run_refresh_job(refresh_raw: bool):
+    global _cache
+    try:
+        from src.data import refresh
+
+        with _refresh_lock:
+            _refresh_status.update({
+                "state": "running",
+                "started_at": _utc_now(),
+                "finished_at": None,
+                "refresh_raw": refresh_raw,
+                "result": None,
+                "error": None,
+            })
+
+        result = refresh.run(refresh_raw=refresh_raw)
+
+        with _refresh_lock:
+            _cache = {}
+            _load_data()
+            _refresh_status.update({
+                "state": "succeeded",
+                "finished_at": _utc_now(),
+                "result": result,
+                "error": None,
+            })
+    except Exception as exc:
+        log.exception("WRDS refresh failed")
+        with _refresh_lock:
+            _refresh_status.update({
+                "state": "failed",
+                "finished_at": _utc_now(),
+                "result": None,
+                "error": str(exc),
+            })
 
 
 def _load_aggregates() -> bool:
@@ -273,6 +337,39 @@ def data_status():
     }
 
 
+@app.post("/api/admin/refresh-data")
+def refresh_data(
+    background_tasks: BackgroundTasks,
+    refresh_raw: bool = Query(False),
+    x_refresh_token: Optional[str] = Header(None),
+):
+    _require_refresh_token(x_refresh_token)
+
+    with _refresh_lock:
+        if _refresh_status["state"] in {"queued", "running"}:
+            raise HTTPException(status_code=409, detail="A WRDS refresh is already running")
+        _refresh_status.update({
+            "state": "queued",
+            "started_at": None,
+            "finished_at": None,
+            "refresh_raw": refresh_raw,
+            "result": None,
+            "error": None,
+        })
+
+    background_tasks.add_task(_run_refresh_job, refresh_raw)
+    return {
+        "status": "queued",
+        "refresh_raw": refresh_raw,
+        "message": "WRDS refresh queued. Poll /api/admin/refresh-status for progress.",
+    }
+
+
+@app.get("/api/admin/refresh-status")
+def refresh_status(x_refresh_token: Optional[str] = Header(None)):
+    _require_refresh_token(x_refresh_token)
+    with _refresh_lock:
+        return dict(_refresh_status)
 @app.get("/api/pead-explorer")
 def pead_explorer(
     ticker: Optional[str] = Query(None),
