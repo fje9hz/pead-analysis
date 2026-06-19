@@ -32,7 +32,9 @@ def connect() -> wrds.Connection:
 
     db = wrds.Connection(autoconnect=False, wrds_username=WRDS_USERNAME)
     db._password = WRDS_PASSWORD
-    db.connect()
+    # Avoid wrds.Connection.connect() fallback prompts in hosted environments.
+    # Render has no stdin, so prompt fallback surfaces as "EOF when reading a line".
+    db._Connection__make_sa_engine_conn(raise_err=True)
     db.load_library_list()
     return db
 
