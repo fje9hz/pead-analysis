@@ -49,6 +49,7 @@ Chart.defaults.font.size = 11;
 async function init() {
   populateYearSelects();
   await loadSelectOptions();
+  await loadDataStatus();
   await loadMethodology();
   setupNavHighlight();
 
@@ -56,8 +57,38 @@ async function init() {
   $('signals-btn').addEventListener('click', loadSignals);
   $('ticker-input').addEventListener('keydown', e => { if (e.key === 'Enter') runExplorer(); });
 
-  // Auto-load signals on page load
   loadSignals();
+}
+
+async function loadDataStatus() {
+  try {
+    const res = await fetch(`${API}/api/data-status`);
+    const d = await res.json();
+    const el = $('hero-data-status');
+    if (el) {
+      el.textContent = d.is_real_data ? 'WRDS Data' : 'Demo Data';
+      el.style.color = d.is_real_data ? '#00C9A7' : '#FFD166';
+    }
+
+    // Update finding banner if real data
+    if (d.is_real_data) {
+      // Load explorer data to get actual quintile numbers for the banner
+      const exRes = await fetch(`${API}/api/pead-explorer`);
+      const exData = await exRes.json();
+      const q = exData.car_by_quintile || {};
+      const beatPct = q['Large Beat']?.car_0_p60;
+      const missPct = q['Large Miss']?.car_0_p60;
+      if (beatPct != null && $('finding-beat-pct'))
+        $('finding-beat-pct').textContent = `+${(beatPct * 100).toFixed(1)}%`;
+      if (missPct != null && $('finding-miss-pct'))
+        $('finding-miss-pct').textContent = `${(missPct * 100).toFixed(1)}%`;
+
+      // Remove demo banners
+      document.querySelectorAll('.demo-banner').forEach(el => el.remove());
+    }
+  } catch(e) {
+    console.warn('Could not load data status', e);
+  }
 }
 
 function populateYearSelects() {
@@ -174,6 +205,7 @@ function renderExplorer(data) {
   renderTimeline(timeline);
   renderCarByQuintile(car_by_quintile);
   renderWindowComparison(car_by_quintile);
+  renderInsight(car_by_quintile);
 }
 
 function renderTimeline(timeline) {
@@ -252,7 +284,15 @@ function renderCarByQuintile(car_by_quintile) {
   destroyChart('car');
   const ctx = $('car-chart').getContext('2d');
 
+  const PLAIN_LABELS = {
+    'Large Miss': 'Badly Missed',
+    'Miss':       'Missed',
+    'Inline':     'In Line',
+    'Beat':       'Beat',
+    'Large Beat': 'Crushed It',
+  };
   const labels = QUINTILE_ORDER.filter(q => car_by_quintile[q]);
+  const plainLabels = labels.map(q => PLAIN_LABELS[q] || q);
   const values = labels.map(q => {
     const v = car_by_quintile[q]?.car_0_p60;
     return v != null ? +(v * 100).toFixed(2) : 0;
@@ -263,7 +303,7 @@ function renderCarByQuintile(car_by_quintile) {
   charts['car'] = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels,
+      labels: plainLabels,
       datasets: [{
         label: 'Avg 60-Day Drift (%)',
         data: values,
@@ -290,6 +330,32 @@ function renderCarByQuintile(car_by_quintile) {
       },
     },
   });
+}
+
+function renderInsight(car_by_quintile) {
+  const el = $('insight-car');
+  if (!el) return;
+  const beat = car_by_quintile['Large Beat'];
+  const miss = car_by_quintile['Large Miss'];
+  if (!beat && !miss) return;
+
+  const beatPct = beat?.car_0_p60 != null ? `+${(beat.car_0_p60 * 100).toFixed(1)}%` : null;
+  const missPct = miss?.car_0_p60 != null ? `${(miss.car_0_p60 * 100).toFixed(1)}%` : null;
+  const beatImm = beat?.car_m1_p1 != null ? `+${(beat.car_m1_p1 * 100).toFixed(1)}%` : null;
+
+  let text = '📌 <strong>What this means in plain English:</strong> ';
+  if (beatPct && missPct) {
+    text += `Stocks that crushed analyst expectations drifted <strong>${beatPct}</strong> above the market over 60 days. `;
+    text += `Stocks that badly missed fell <strong>${missPct}</strong>. `;
+  }
+  if (beatImm && beat?.car_0_p60 != null) {
+    const delayed = (beat.car_0_p60 * 100).toFixed(1);
+    const immediate = (beat.car_m1_p1 * 100).toFixed(1);
+    text += `Of the ${beatPct} total drift for big beats, only <strong>${beatImm}</strong> happened on earnings day itself — the rest built up gradually over the following weeks. That delayed reaction is PEAD.`;
+  }
+
+  el.innerHTML = text;
+  el.classList.add('visible');
 }
 
 function renderWindowComparison(car_by_quintile) {

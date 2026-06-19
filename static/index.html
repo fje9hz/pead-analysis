@@ -67,11 +67,25 @@
         </div>
         <div class="hero-stat">
           <div class="hero-stat-label">Status</div>
-          <div class="hero-stat-value" style="color:#FFD166;font-size:0.82rem">Demo Data</div>
+          <div class="hero-stat-value" id="hero-data-status" style="color:#FFD166;font-size:0.82rem">Loading...</div>
         </div>
       </div>
     </div>
   </header>
+
+  <!-- KEY FINDING BANNER -->
+  <div class="finding-banner">
+    <div class="finding-inner">
+      <span class="finding-label">Key Finding</span>
+      <span class="finding-text">
+        Stocks that <strong>crushed analyst estimates</strong> by the most continued rising an average of
+        <strong id="finding-beat-pct">+10.4%</strong> over the next 60 days —
+        while stocks that <strong>badly missed</strong> fell
+        <strong id="finding-miss-pct">-9.8%</strong> — even after the initial earnings reaction.
+        That gap is the drift this model is designed to capture.
+      </span>
+    </div>
+  </div>
 
   <main>
 
@@ -140,22 +154,25 @@
 
         <div id="charts-area" class="charts-grid hidden">
           <div class="card chart-card chart-card--wide">
-            <h3 class="card-title">Earnings Surprise Timeline</h3>
-            <p class="card-sub">Each point = one announcement. Beat (teal) vs miss (red). Y-axis: % surprise vs consensus.</p>
+            <h3 class="card-title">Did Companies Beat or Miss Analyst Expectations?</h3>
+            <p class="card-sub">Each dot = one earnings announcement. <span style="color:#00C9A7">Teal = beat estimates</span>, <span style="color:#FF4757">red = missed</span>. The Y-axis shows by how much — e.g. +20% means the company earned 20% more than analysts expected.</p>
             <div class="chart-container">
               <canvas id="timeline-chart"></canvas>
             </div>
           </div>
           <div class="card chart-card">
-            <h3 class="card-title">Average 60-Day CAR by Quintile</h3>
-            <p class="card-sub">Cumulative abnormal return (stock minus market) over [0, +60] days post-announcement.</p>
+            <h3 class="card-title">How Much Do Stocks Drift After Earnings?
+              <span class="jargon-tip" data-tip="CAR = Cumulative Abnormal Return. It measures how much a stock returned above the overall market — so +5% CAR means the stock beat the market by 5 percentage points.">What is CAR? ℹ</span>
+            </h3>
+            <p class="card-sub">Average return above the market benchmark over 60 trading days after the announcement, grouped by how much the company beat or missed estimates.</p>
             <div class="chart-container chart-container--sm">
               <canvas id="car-chart"></canvas>
             </div>
+            <div class="insight-box" id="insight-car"></div>
           </div>
           <div class="card chart-card">
-            <h3 class="card-title">Immediate vs. Delayed Reaction</h3>
-            <p class="card-sub">Day [-1,+1] = announcement shock. [0,+30] and [0,+60] reveal the drift pattern.</p>
+            <h3 class="card-title">Does the Market React Immediately or Slowly?</h3>
+            <p class="card-sub">Compares the stock's reaction on earnings day (Day -1 to +1) vs. 30 and 60 days later. A bigger 60-day bar relative to day-1 means the market was slow to fully price in the news.</p>
             <div class="chart-container chart-container--sm">
               <canvas id="window-chart"></canvas>
             </div>
@@ -173,7 +190,7 @@
         <div class="section-header">
           <span class="section-num">02</span>
           <h2 class="section-title">Signal Dashboard</h2>
-          <p class="section-desc">Pre-announcement model predictions based on analyst revision trends, dispersion, and prior surprises.</p>
+          <p class="section-desc">Before each earnings announcement, the model scores each company. Green = likely to beat. Red = likely to miss. Gray = too close to call.</p>
         </div>
 
         <div class="demo-banner">
@@ -241,36 +258,41 @@
         <div id="methodology-loading" class="loading">Loading</div>
         <div id="methodology-content" class="hidden">
 
+          <div class="tldr-box">
+            <div class="tldr-label">TL;DR</div>
+            <p>Companies report earnings every quarter. Analysts make predictions beforehand. When a company beats those predictions by a lot, its stock doesn't just jump on the day — it keeps rising for weeks. This project measures that pattern using 13 years of real Wall Street data, then builds a model to predict which companies are most likely to beat or miss <em>before</em> they announce.</p>
+          </div>
+
           <div class="method-grid">
             <div class="method-card">
-              <div class="method-num">01 / What Is PEAD</div>
-              <h3 class="method-title">The Anomaly</h3>
+              <div class="method-num">01 / The Pattern</div>
+              <h3 class="method-title">Why stocks keep moving after earnings</h3>
               <p class="method-text" id="text-what-is-pead"></p>
             </div>
             <div class="method-card">
-              <div class="method-num">02 / Why It Happens</div>
-              <h3 class="method-title">Market Underreaction</h3>
+              <div class="method-num">02 / The Reason</div>
+              <h3 class="method-title">Why doesn't the market react all at once?</h3>
               <p class="method-text" id="text-why"></p>
             </div>
             <div class="method-card">
-              <div class="method-num">03 / Data</div>
-              <h3 class="method-title">Institutional Sources</h3>
+              <div class="method-num">03 / The Data</div>
+              <h3 class="method-title">Where the numbers come from</h3>
               <p class="method-text" id="text-data"></p>
             </div>
             <div class="method-card">
-              <div class="method-num">04 / Surprise Calculation</div>
-              <h3 class="method-title">Earnings Surprise</h3>
+              <div class="method-num">04 / The Math</div>
+              <h3 class="method-title">How we measure a "beat" or "miss"</h3>
               <p class="method-text" id="text-surprise"></p>
               <div class="formula">Surprise = (Actual − Consensus) / |Consensus|</div>
             </div>
             <div class="method-card">
-              <div class="method-num">05 / Return Measurement</div>
-              <h3 class="method-title">Cumulative Abnormal Return</h3>
+              <div class="method-num">05 / The Measurement</div>
+              <h3 class="method-title">How we track the drift</h3>
               <p class="method-text" id="text-car"></p>
             </div>
             <div class="method-card">
-              <div class="method-num">06 / Prediction Model</div>
-              <h3 class="method-title">ML Architecture</h3>
+              <div class="method-num">06 / The Model</div>
+              <h3 class="method-title">How the prediction works</h3>
               <p class="method-text" id="text-ml"></p>
             </div>
           </div>
