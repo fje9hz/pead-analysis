@@ -55,6 +55,7 @@ async function init() {
 
   $('explore-btn').addEventListener('click', runExplorer);
   $('signals-btn').addEventListener('click', loadSignals);
+  $('bt-btn').addEventListener('click', runBacktest);
   $('ticker-input').addEventListener('keydown', e => { if (e.key === 'Enter') runExplorer(); });
 
   loadSignals();
@@ -541,6 +542,9 @@ function renderMethodology(data) {
   // Feature importance chart
   renderFeatureImportance(data.feature_importance ?? []);
 
+  // Model comparison chart
+  renderModelComparison(data);
+
   show('methodology-content');
 }
 
@@ -587,5 +591,203 @@ function renderFeatureImportance(features) {
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // BOOT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SECTION 3: BACKTEST
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async function runBacktest() {
+  const quintile = $('bt-quintile').value;
+  hide('bt-results');
+  hide('bt-error');
+  show('bt-loading');
+
+  try {
+    const res = await fetch(`${API}/api/backtest?quintile=${encodeURIComponent(quintile)}&hold_days=60`);
+    if (!res.ok) { const e = await res.json(); throw new Error(e.detail || 'API error'); }
+    const data = await res.json();
+    hide('bt-loading');
+    renderBacktest(data);
+  } catch(e) {
+    hide('bt-loading');
+    show('bt-error');
+    $('bt-error').textContent = `Error: ${e.message}`;
+  }
+}
+
+function renderBacktest(data) {
+  const sign = v => v >= 0 ? '+' : '';
+
+  $('bt-n-trades').textContent   = data.n_trades?.toLocaleString() ?? '—';
+  $('bt-total-return').textContent = data.total_return != null ? `${sign(data.total_return)}${(data.total_return*100).toFixed(1)}%` : '—';
+  $('bt-cagr').textContent        = data.cagr != null ? `${sign(data.cagr)}${(data.cagr*100).toFixed(1)}%/yr` : '—';
+  $('bt-avg-trade').textContent   = data.avg_trade_return != null ? `${sign(data.avg_trade_return)}${(data.avg_trade_return*100).toFixed(2)}%` : '—';
+  $('bt-win-rate').textContent    = data.win_rate != null ? `${(data.win_rate*100).toFixed(1)}%` : '—';
+
+  const isPositive = (data.total_return ?? 0) >= 0;
+  $('bt-total-return').style.color = isPositive ? TEAL : RED;
+  $('bt-cagr').style.color         = isPositive ? TEAL : RED;
+
+  renderWealthChart(data.annual);
+  renderBtAnnualChart(data.annual);
+  renderAnnualBeatChart();
+
+  show('bt-results');
+}
+
+function renderWealthChart(annual) {
+  destroyChart('bt-wealth');
+  const ctx = $('bt-wealth-chart').getContext('2d');
+  const labels = annual.map(r => r.year);
+  const wealth  = annual.map(r => +((r.cumulative_wealth - 1) * 100).toFixed(2));
+
+  const color = (wealth[wealth.length - 1] ?? 0) >= 0 ? TEAL : RED;
+
+  charts['bt-wealth'] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Cumulative Return vs Market (%)',
+        data: wealth,
+        borderColor: color,
+        backgroundColor: color.replace(')', ', 0.08)').replace('rgb', 'rgba').replace('#00C9A7', 'rgba(0,201,167,0.08)').replace('#FF4757','rgba(255,71,87,0.08)'),
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+        pointHoverRadius: 6,
+      }, {
+        label: 'Market Benchmark (0%)',
+        data: labels.map(() => 0),
+        borderColor: 'rgba(255,255,255,0.15)',
+        borderDash: [4, 4],
+        pointRadius: 0,
+        fill: false,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: MUTED, boxWidth: 10, font: { size: 10 } } },
+        tooltip: { callbacks: { label: item => `${item.dataset.label}: ${item.parsed.y >= 0 ? '+' : ''}${item.parsed.y.toFixed(2)}%` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: MUTED } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: MUTED, callback: v => v + '%' } },
+      },
+    },
+  });
+}
+
+function renderBtAnnualChart(annual) {
+  destroyChart('bt-annual');
+  const ctx = $('bt-annual-chart').getContext('2d');
+  charts['bt-annual'] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: annual.map(r => r.year),
+      datasets: [{
+        label: 'Avg Abnormal Return per Trade',
+        data: annual.map(r => +((r.avg_return ?? 0) * 100).toFixed(2)),
+        backgroundColor: annual.map(r => (r.avg_return ?? 0) >= 0 ? 'rgba(0,201,167,0.7)' : 'rgba(255,71,87,0.65)'),
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: item => `${item.parsed.y >= 0 ? '+' : ''}${item.parsed.y.toFixed(2)}%` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: MUTED, font: { size: 9 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: MUTED, callback: v => v + '%' } },
+      },
+    },
+  });
+}
+
+async function renderAnnualBeatChart() {
+  destroyChart('annual-beat');
+  try {
+    const res = await fetch(`${API}/api/annual-trend`);
+    const data = await res.json();
+    const annual = data.annual ?? [];
+    const ctx = $('annual-beat-chart').getContext('2d');
+    charts['annual-beat'] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: annual.map(r => r.year),
+        datasets: [{
+          label: 'Beat Rate',
+          data: annual.map(r => +((r.beat_rate ?? 0) * 100).toFixed(1)),
+          borderColor: YELLOW,
+          backgroundColor: 'rgba(255,209,102,0.08)',
+          fill: true,
+          tension: 0.35,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: item => `Beat Rate: ${item.parsed.y.toFixed(1)}%` } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: MUTED } },
+          y: {
+            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: MUTED, callback: v => v + '%' },
+            min: 50, max: 80,
+          },
+        },
+      },
+    });
+  } catch(e) { console.warn('Could not load annual trend', e); }
+}
+
+// ── Model comparison chart (rendered inside methodology)
+function renderModelComparison(metrics) {
+  destroyChart('model-compare');
+  const ctx = $('model-compare-chart');
+  if (!ctx || !metrics.lr_metrics || !metrics.rf_metrics) return;
+
+  const metricLabels = ['AUC', 'Accuracy', 'Precision', 'Recall', 'F1'];
+  const metricKeys   = ['roc_auc', 'accuracy', 'precision', 'recall', 'f1'];
+
+  charts['model-compare'] = new Chart(ctx.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: metricLabels,
+      datasets: [
+        {
+          label: 'Logistic Regression',
+          data: metricKeys.map(k => +((metrics.lr_metrics[k] ?? 0) * 100).toFixed(1)),
+          backgroundColor: 'rgba(255,209,102,0.7)',
+          borderRadius: 3,
+        },
+        {
+          label: 'Random Forest ✓ Selected',
+          data: metricKeys.map(k => +((metrics.rf_metrics[k] ?? 0) * 100).toFixed(1)),
+          backgroundColor: 'rgba(0,201,167,0.75)',
+          borderRadius: 3,
+        },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: MUTED, boxWidth: 10, font: { size: 10 } } },
+        tooltip: { callbacks: { label: item => `${item.dataset.label}: ${item.parsed.y.toFixed(1)}%` } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: MUTED } },
+        y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: MUTED, callback: v => v + '%' }, min: 50, max: 100 },
+      },
+    },
+  });
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 document.addEventListener('DOMContentLoaded', init);

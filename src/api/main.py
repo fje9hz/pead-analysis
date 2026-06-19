@@ -437,6 +437,102 @@ def pead_explorer(
     }
 
 
+@app.get("/api/annual-trend")
+def annual_trend():
+    _load_data()
+    return {"annual": _cache.get("agg_annual") or []}
+
+
+@app.get("/api/backtest")
+def backtest(
+    quintile: str = Query("Large Beat"),
+    hold_days: int = Query(60),
+):
+    """
+    Simulate a long-only strategy: buy stocks in `quintile` the day after
+    announcement, hold for `hold_days` trading days. Compare cumulative
+    return vs. a buy-and-hold market benchmark (assumed flat daily excess).
+    Uses CAR windows already computed in features.csv.
+    """
+    _load_data()
+
+    # Need row-level data
+    df = _cache.get("df")
+    if df is None:
+        # Fall back to quintile aggregates for a simplified version
+        qcar = _cache.get("agg_quintile_car") or []
+        q_map = {q["quintile"]: q for q in qcar}
+        quintiles = ["Large Miss", "Miss", "Inline", "Beat", "Large Beat"]
+        results = []
+        cum = 1.0
+        mkt_cum = 1.0
+        for i, q in enumerate(quintiles):
+            row = q_map.get(q, {})
+            r = row.get("avg_car_0_p60") or 0
+            cum *= (1 + r)
+            results.append({
+                "quintile": q,
+                "avg_car_60": round(r, 4),
+                "strategy_cum": round(cum - 1, 4),
+            })
+        return {"results": results, "is_real_data": False, "note": "Simplified — no row-level data"}
+
+    car_col = "car_0_p60" if hold_days >= 60 else "car_0_p30" if hold_days >= 30 else "car_m1_p1"
+
+    # Filter to requested quintile, sort by date
+    sub = df[df["surprise_quintile"] == quintile].dropna(subset=[car_col, "anndats"]).copy()
+    if sub.empty:
+        raise HTTPException(status_code=404, detail=f"No events found for quintile '{quintile}'")
+
+    sub = sub.sort_values("anndats")
+    sub["anndats_str"] = sub["anndats"].dt.strftime("%Y-%m-%d")
+
+    # Build cumulative return series (equal-weight, no compounding across holdings)
+    # Each trade = 1 unit of capital, returns car_col
+    sub["trade_return"] = pd.to_numeric(sub[car_col], errors="coerce").fillna(0)
+
+    # Annual aggregation for the P&L chart
+    sub["year"] = sub["anndats"].dt.year
+    annual = sub.groupby("year").agg(
+        n_trades=("trade_return", "count"),
+        avg_return=("trade_return", "mean"),
+        win_rate=("trade_return", lambda x: (x > 0).mean()),
+    ).reset_index()
+
+    # Cumulative wealth index
+    cum_returns = []
+    cum = 1.0
+    for _, row in annual.iterrows():
+        cum *= (1 + row["avg_return"])
+        cum_returns.append({
+            "year": int(row["year"]),
+            "n_trades": int(row["n_trades"]),
+            "avg_return": round(float(row["avg_return"]), 4),
+            "win_rate": round(float(row["win_rate"]), 3),
+            "cumulative_wealth": round(cum, 4),
+        })
+
+    # Summary stats
+    total_return = cum - 1
+    n_years = len(cum_returns)
+    cagr = (cum ** (1 / n_years) - 1) if n_years > 0 else 0
+    avg_trade = float(sub["trade_return"].mean())
+    win_rate = float((sub["trade_return"] > 0).mean())
+
+    # Compare to market (annual_summary avg CAR is vs market, so market baseline = 0)
+    return {
+        "quintile": quintile,
+        "hold_days": hold_days,
+        "n_trades": len(sub),
+        "total_return": round(total_return, 4),
+        "cagr": round(cagr, 4),
+        "avg_trade_return": round(avg_trade, 4),
+        "win_rate": round(win_rate, 3),
+        "annual": cum_returns,
+        "is_real_data": True,
+    }
+
+
 @app.get("/api/methodology")
 def methodology():
     _load_data()

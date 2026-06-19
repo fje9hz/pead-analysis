@@ -22,6 +22,7 @@
       <ul class="nav-links">
         <li><a href="#explorer" class="nav-link active" data-section="explorer">Explorer</a></li>
         <li><a href="#signals" class="nav-link" data-section="signals">Signals</a></li>
+        <li><a href="#backtest" class="nav-link" data-section="backtest">Backtest</a></li>
         <li><a href="#methodology" class="nav-link" data-section="methodology">Methodology</a></li>
       </ul>
       <div class="nav-right">S&amp;P 500 · 2010–2023</div>
@@ -247,11 +248,93 @@
       </div>
     </section>
 
-    <!-- ══ SECTION 3: METHODOLOGY ══ -->
-    <section id="methodology" class="section">
+    <!-- ══ SECTION 3: BACKTEST ══ -->
+    <section id="backtest" class="section section--alt">
       <div class="section-inner">
         <div class="section-header">
           <span class="section-num">03</span>
+          <h2 class="section-title">Strategy Backtest</h2>
+          <p class="section-desc">What if you bought every stock in a given surprise quintile the day after earnings and held for 60 days? This simulates that strategy from 2010–2023 using real CRSP returns.</p>
+        </div>
+
+        <div class="card controls">
+          <div class="controls-row">
+            <div class="control-group">
+              <label class="control-label">Surprise Quintile</label>
+              <select id="bt-quintile" class="input select" style="width:160px">
+                <option value="Large Beat">Crushed It (Large Beat)</option>
+                <option value="Beat">Beat</option>
+                <option value="Inline">In Line</option>
+                <option value="Miss">Missed</option>
+                <option value="Large Miss">Badly Missed (Large Miss)</option>
+              </select>
+            </div>
+            <div class="control-group control-group--btn">
+              <label class="control-label">&nbsp;</label>
+              <button id="bt-btn" class="btn btn-primary">Run Backtest</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="bt-loading" class="loading hidden">Running backtest</div>
+        <div id="bt-error" class="error-msg hidden"></div>
+
+        <div id="bt-results" class="hidden">
+          <div class="stats-row" style="margin-bottom:1.5rem">
+            <div class="stat-card">
+              <div class="stat-label">Total Trades</div>
+              <div class="stat-value" id="bt-n-trades">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Total Return</div>
+              <div class="stat-value" id="bt-total-return">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">CAGR</div>
+              <div class="stat-value" id="bt-cagr">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Avg Trade Return</div>
+              <div class="stat-value" id="bt-avg-trade">—</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Win Rate</div>
+              <div class="stat-value" id="bt-win-rate">—</div>
+            </div>
+          </div>
+
+          <div class="charts-grid">
+            <div class="card chart-card chart-card--wide">
+              <h3 class="card-title">Cumulative Wealth Index (2010–2023)</h3>
+              <p class="card-sub">Starting with $1, reinvesting average returns each year for the selected quintile. Assumes equal-weight position in every stock that announces in that quintile.</p>
+              <div class="chart-container">
+                <canvas id="bt-wealth-chart"></canvas>
+              </div>
+            </div>
+            <div class="card chart-card">
+              <h3 class="card-title">Average Return Per Year</h3>
+              <p class="card-sub">Annual average abnormal return (above market) per trade in this quintile. Negative years show when the drift pattern breaks down.</p>
+              <div class="chart-container chart-container--sm">
+                <canvas id="bt-annual-chart"></canvas>
+              </div>
+            </div>
+            <div class="card chart-card">
+              <h3 class="card-title">Beat Rate Over Time</h3>
+              <p class="card-sub">Percentage of S&P 500 companies beating analyst estimates each year. Rising trend since 2010 reflects analyst anchoring and guidance management becoming more common.</p>
+              <div class="chart-container chart-container--sm">
+                <canvas id="annual-beat-chart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ SECTION 4: METHODOLOGY ══ -->
+    <section id="methodology" class="section">
+      <div class="section-inner">
+        <div class="section-header">
+          <span class="section-num">04</span>
           <h2 class="section-title">Methodology</h2>
           <p class="section-desc">Research design, data sources, and model architecture — written for a non-technical audience.</p>
         </div>
@@ -302,6 +385,14 @@
             <h3 class="card-title">Model Performance — Time-Series Cross-Validation</h3>
             <p class="card-sub">Walk-forward CV: each fold trains only on past data. No look-ahead bias.</p>
             <div class="metrics-grid" id="metrics-grid"></div>
+          </div>
+
+          <div class="card">
+            <h3 class="card-title">Logistic Regression vs Random Forest</h3>
+            <p class="card-sub">Both models trained identically. Random Forest wins on AUC (0.704 vs 0.674) — selected as the production model. LR has higher recall but lower precision, meaning it flags more beats but with more false positives.</p>
+            <div class="chart-container chart-container--sm">
+              <canvas id="model-compare-chart"></canvas>
+            </div>
           </div>
 
           <div class="card">
