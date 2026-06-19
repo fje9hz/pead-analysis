@@ -132,7 +132,7 @@ def pull_sp500_constituents(db: wrds.Connection) -> pd.DataFrame:
     """Historical S&P 500 constituents from CRSP."""
     log.info("Pulling S&P 500 constituents ...")
     query = f"""
-        SELECT permno, start, ending, co_name
+        SELECT permno, start, ending
         FROM crsp.dsp500list
         WHERE EXTRACT(YEAR FROM start) <= {END_YEAR}
           AND (ending IS NULL OR EXTRACT(YEAR FROM ending) >= {START_YEAR})
