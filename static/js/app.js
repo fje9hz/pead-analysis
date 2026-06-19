@@ -190,7 +190,7 @@ async function runExplorer() {
 }
 
 function renderExplorer(data) {
-  const { summary, timeline, car_by_quintile } = data;
+  const { summary, timeline, car_by_quintile, note } = data;
 
   // Stats
   $('stat-events').textContent = summary.n_events?.toLocaleString() ?? '—';
@@ -204,6 +204,13 @@ function renderExplorer(data) {
 
   show('summary-stats');
   show('charts-area');
+
+  // Show ticker-level note when row-level data isn't available
+  const noteEl = $('insight-car');
+  if (note && noteEl) {
+    noteEl.innerHTML = `ℹ️ ${note} The CAR chart below shows the S&P 500 aggregate drift pattern — individual event history isn't available in the deployed version.`;
+    noteEl.classList.add('visible');
+  }
 
   renderTimeline(timeline);
   renderCarByQuintile(car_by_quintile);
@@ -338,6 +345,7 @@ function renderCarByQuintile(car_by_quintile) {
 function renderInsight(car_by_quintile) {
   const el = $('insight-car');
   if (!el) return;
+  if (el.classList.contains('visible')) return;  // already set by note
   const beat = car_by_quintile['Large Beat'];
   const miss = car_by_quintile['Large Miss'];
   if (!beat && !miss) return;

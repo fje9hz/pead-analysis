@@ -379,8 +379,10 @@ def pead_explorer(
 ):
     _load_data()
 
-    # Use real WRDS aggregates if available and no ticker filter needed
-    if _cache.get("is_real_data") and not ticker and not sector and "df" not in _cache:
+    # Use real WRDS aggregates if row-level data isn't available
+    if _cache.get("is_real_data") and "df" not in _cache:
+        if ticker:
+            return _explorer_ticker_from_aggregates(ticker, start_year, end_year)
         return _explorer_from_aggregates(start_year, end_year)
 
     df = _cache["df"].copy()
@@ -502,6 +504,49 @@ def _methodology_text() -> dict:
             "and nothing here should be interpreted as a recommendation to buy or sell any security. "
             "Past performance of any documented market anomaly does not guarantee future results."
         ),
+    }
+
+
+def _explorer_ticker_from_aggregates(ticker: str, start_year: int, end_year: int) -> dict:
+    """Return explorer response for a specific ticker from aggregate data."""
+    agg_tickers = _cache.get("agg_tickers") or []
+    match = next((t for t in agg_tickers if t["ticker"].upper() == ticker.upper()), None)
+    if not match:
+        raise HTTPException(status_code=404, detail=f"Ticker '{ticker}' not found in dataset")
+
+    quintile_car = _cache.get("agg_quintile_car") or []
+    car_by_quintile = {}
+    for q in quintile_car:
+        car_by_quintile[q["quintile"]] = {
+            "car_m1_p1": q.get("avg_car_m1_p1"),
+            "car_0_p30": q.get("avg_car_0_p30"),
+            "car_0_p60": q.get("avg_car_0_p60"),
+            "n": q.get("n"),
+        }
+
+    # Synthetic timeline point using aggregate stats for this ticker
+    timeline = [{
+        "anndats": f"{end_year}-01-01",
+        "ticker": match["ticker"],
+        "surprise": match.get("avg_surprise"),
+        "surprise_quintile": "Beat" if (match.get("avg_surprise") or 0) > 0 else "Miss",
+        "beat": 1 if (match.get("avg_surprise") or 0) > 0 else 0,
+        "actual_eps": None,
+        "medest": None,
+    }]
+
+    return {
+        "summary": {
+            "n_events": match.get("n_events"),
+            "beat_rate": match.get("beat_rate"),
+            "avg_surprise": match.get("avg_surprise"),
+            "avg_car_0_60": match.get("avg_car_0_p60"),
+            "median_analysts": match.get("avg_num_analysts"),
+        },
+        "timeline": timeline,
+        "car_by_quintile": car_by_quintile,
+        "is_real_data": True,
+        "note": f"Showing S&P 500 aggregate CAR by quintile. {match['ticker']} has {match.get('n_events', '?')} events with {round((match.get('beat_rate') or 0)*100)}% beat rate.",
     }
 
 
