@@ -376,6 +376,12 @@ body {
 }
 .stat-value--up { color: var(--teal); }
 .stat-value--down { color: var(--red); }
+.stat-desc {
+  font-size: 0.7rem;
+  color: var(--white-muted);
+  margin-top: 0.3rem;
+  line-height: 1.4;
+}
 
 /* ── CHARTS ── */
 .charts-grid {
