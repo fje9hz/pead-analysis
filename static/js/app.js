@@ -83,8 +83,11 @@ async function loadDataStatus() {
       if (missPct != null && $('finding-miss-pct'))
         $('finding-miss-pct').textContent = `${(missPct * 100).toFixed(1)}%`;
 
-      // Remove demo banners
-      document.querySelectorAll('.demo-banner').forEach(el => el.remove());
+      // Hide demo banners
+      ['demo-banner-explorer', 'demo-banner-signals'].forEach(id => {
+        const el = $(id);
+        if (el) el.style.display = 'none';
+      });
     }
   } catch(e) {
     console.warn('Could not load data status', e);
